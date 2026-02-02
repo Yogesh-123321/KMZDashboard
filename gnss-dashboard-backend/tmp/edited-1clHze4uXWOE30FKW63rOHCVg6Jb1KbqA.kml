@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>GNSS Track + Media Export</name>
+<Placemark>
+<name>Track Session 1</name>
+<Style><LineStyle><color>ffff0000</color><width>6</width></LineStyle></Style>
+<LineString><tessellate>1</tessellate><coordinates>77.32412500000001,28.402411666666662,0</coordinates></LineString>
+</Placemark>
+<Placemark>
+<name>Photo @ 1735015126645</name>
+<description><![CDATA[<h3>Captured Photo</h3><img src="images/img_1735015126645.jpg" width="400"/>]]></description>
+<Point><coordinates>77.32412500000001,28.402411666666662,0</coordinates></Point>
+<Style><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon></IconStyle></Style>
+</Placemark>
+
+  <Placemark>
+    <name>Edited Track</name>
+    <Style>
+      <LineStyle>
+        <color>ffff0000</color>
+        <width>4</width>
+      </LineStyle>
+    </Style>
+    <LineString>
+      <tessellate>1</tessellate>
+      <altitudeMode>clampToGround</altitudeMode>
+      <coordinates>
+77.32079029083252,28.404150848210435,0
+77.32070446014406,28.405840099919086,0
+77.32091903686525,28.405585298313728,0
+77.32173442840578,28.405604172527724,0
+77.32160568237306,28.406179834439634,0
+77.32322573661804,28.40618927149409,0
+77.32338666915895,28.405056818956325,0
+      </coordinates>
+    </LineString>
+  </Placemark>
+  
+</Document>
+</kml>
