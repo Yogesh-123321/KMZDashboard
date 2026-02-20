@@ -7,7 +7,7 @@ import ImagePreview from "@/components/ImagePreview";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-export default function KmzList() {
+export default function KmzList({ reloadTrigger, onFileSelected }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -51,7 +51,7 @@ dragPreview = {
     fetchKmzFiles()
       .then(setFiles)
       .finally(() => setLoading(false));
-  }, []);
+  }, [reloadTrigger]);
 
 function handleSaveEdit() {
   setTrackEditMode(null);
@@ -92,9 +92,10 @@ function handleCancelEdit() {
   setTrackEditEnabled(false);
   setTrackEditMode(null);
   setEditedTracks([]);
-
-  setSelected(file);
-  setParsed(null);
+  
+setSelected(file);
+onFileSelected?.(file);   // ← ADD THIS LINE
+setParsed(null);
 
     await parseKmz(file.id, file.name);
 
@@ -436,8 +437,14 @@ function handlePhotoDragEnd(photo, coords) {
                               alert("Enter at least two valid coordinates.");
                               return;
                             }
+                            setEditedTracks([
+                              {
+                                id: "coordinates",
+                                coordinates: newTrack
+                              }
+                            ]);
 
-                            setEditedTrack(newTrack);
+                            setTrackEditMode(null);
                           }}
                         >
                           Apply Coordinates
@@ -711,13 +718,17 @@ console.log("editablePoints before apply:", editablePoints);
 
 
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/kmz/${selected.id}/save-copy`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
-      );
+  `${import.meta.env.VITE_API_BASE_URL}/api/kmz/${selected.id}/save-copy`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token")
+    },
+    body: JSON.stringify(payload)
+  }
+);
+
 
     if (!res.ok) throw new Error("Save failed");
 

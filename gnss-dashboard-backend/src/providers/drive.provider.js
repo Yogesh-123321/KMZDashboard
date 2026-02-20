@@ -7,6 +7,7 @@ async function getUserFiles(driveFolderId) {
     id: f.id,
     name: f.name,
     mimeType: f.mimeType,
+    parents: f.parents,
     size: f.size,
     modifiedTime: f.modifiedTime
   }));

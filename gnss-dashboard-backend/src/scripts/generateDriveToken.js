@@ -5,7 +5,7 @@ const { google } = require("googleapis");
 
 const CREDENTIALS_PATH = path.join(
   __dirname,
-  "../credentials/oauth.credentials.json"
+  "../credentials/oauth-client.json"
 );
 
 const TOKEN_PATH = path.join(

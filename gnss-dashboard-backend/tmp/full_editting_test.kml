@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>GNSS Track + Media Export</name>
+<Placemark>
+<name>Track Session 1</name>
+<Style><LineStyle><color>ffff0000</color><width>6</width></LineStyle></Style>
+<LineString><tessellate>1</tessellate><coordinates>
+77.33318,28.406541666666666,0 77.33314166666668,28.406668333333332,0 77.33310333333334,28.406795000000002,0 77.33306333333333,28.40692166666667,0 77.33302499999999,28.407048333333332,0 </coordinates></LineString>
+</Placemark>
+<Placemark>
+<name>Track Session 2</name>
+<Style><LineStyle><color>ffff0000</color><width>6</width></LineStyle></Style>
+<LineString><tessellate>1</tessellate><coordinates>
+77.33272666666667,28.408054999999997,0 77.33264833333332,28.408305000000002,0 77.33257333333333,28.408560000000005,0 77.33253666666666,28.408693333333336,0 77.332465,28.408965,0 77.33239333333333,28.40922666666667,0 77.33232500000001,28.409474999999997,0 </coordinates></LineString>
+</Placemark>
+
+  <Placemark>
+    <name>Original Track (Static)</name>
+    <Style>
+      <LineStyle>
+        <color>ff2563eb</color> <!-- blue -->
+        <width>4</width>
+      </LineStyle>
+    </Style>
+    <LineString>
+      <tessellate>1</tessellate>
+      <coordinates>
+77.33318,28.406541666666666,0
+77.33314166666668,28.406668333333332,0
+77.33310333333334,28.406795000000002,0
+77.33306333333333,28.40692166666667,0
+77.33302499999999,28.407048333333332,0
+      </coordinates>
+    </LineString>
+  </Placemark>
+  
+
+<Placemark>
+  <name>Edited Track 1</name>
+  <Style>
+    <LineStyle>
+      <color>ffff0000</color>
+      <width>4</width>
+    </LineStyle>
+  </Style>
+  <LineString>
+    <tessellate>1</tessellate>
+    <coordinates>
+77.33318,28.406541666666666,0
+77.33314166666668,28.406668333333332,0
+77.33310333333334,28.406795000000002,0
+77.33306333333333,28.40692166666667,0
+77.33302499999999,28.407048333333332,0
+    </coordinates>
+  </LineString>
+</Placemark>
+
+
+<Placemark>
+  <name>Edited Track 2</name>
+  <Style>
+    <LineStyle>
+      <color>ffff0000</color>
+      <width>4</width>
+    </LineStyle>
+  </Style>
+  <LineString>
+    <tessellate>1</tessellate>
+    <coordinates>
+77.32789278030397,28.40862400345789,0
+77.32793569564821,28.40819934493504,0
+77.32974886894227,28.408312587374258,0
+77.33022093772888,28.408350334827098,0
+77.33014583587648,28.409152465019936,0
+77.33008146286012,28.40984134845485,0
+77.32834339141847,28.409690360688092,0
+77.32841849327089,28.40829371364279,0
+    </coordinates>
+  </LineString>
+</Placemark>
+
+</Document>
+</kml>

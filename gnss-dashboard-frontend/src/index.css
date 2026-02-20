@@ -122,3 +122,34 @@
 .leaflet-container {
   z-index: 0 !important;
 }
+/* ───────── GLOBAL SCROLLBAR ───────── */
+
+/* ───────── GLOBAL SCROLLBAR ───────── */
+
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59,130,246,0.7) transparent;
+}
+
+/* Apply to ALL scrollable containers */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(59,130,246,0.7),
+    rgba(37,99,235,0.9)
+  );
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(37,99,235,1);
+}

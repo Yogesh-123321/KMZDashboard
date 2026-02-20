@@ -194,10 +194,12 @@ const activeEditedTrack =
         style={{ height: "100%", width: "100%" }}
       >
 <TileLayer
-  url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
-   maxZoom={19}
-  attribution="© OpenStreetMap contributors, HOT"
+  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  attribution="© OpenStreetMap contributors"
+  maxZoom={19}
 />
+
+
 
         <MapController bounds={allBounds} />
 

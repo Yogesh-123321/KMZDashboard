@@ -2,15 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const { google } = require("googleapis");
 
-const CREDENTIALS_PATH = path.join(
-  __dirname,
-  "../credentials/oauth-client.json"
-);
-
-const TOKEN_PATH = path.join(
-  __dirname,
-  "../credentials/token.json"
-);
+const CREDENTIALS_PATH = path.join(__dirname, "../credentials/oauth-client.json");
+const TOKEN_PATH = path.join(__dirname, "../credentials/token.json");
 
 function getOAuthDrive() {
   const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));

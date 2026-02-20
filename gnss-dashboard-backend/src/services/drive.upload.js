@@ -1,18 +1,17 @@
 const fs = require("fs");
 const path = require("path");
-const { google } = require("googleapis");
 const { getOAuthDrive } = require("./drive.oauth");
 
 async function uploadKmzCopy({ localPath, name }) {
   if (!localPath) {
-    throw new Error("uploadKmzCopy: localPath is missing");
+    throw new Error("localPath missing");
   }
 
   const drive = getOAuthDrive();
 
   const folderId = process.env.GDRIVE_FOLDER_ID;
   if (!folderId) {
-    throw new Error("GDRIVE_FOLDER_ID is not set in .env");
+    throw new Error("GDRIVE_FOLDER_ID not set");
   }
 
   console.log("Uploading to Drive folder:", folderId);
@@ -25,7 +24,7 @@ async function uploadKmzCopy({ localPath, name }) {
     },
     media: {
       mimeType: "application/vnd.google-earth.kmz",
-      body: fs.createReadStream(localPath)
+      body: fs.createReadStream(path.resolve(localPath))
     }
   });
 
