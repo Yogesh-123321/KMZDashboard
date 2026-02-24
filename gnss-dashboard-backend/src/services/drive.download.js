@@ -1,15 +1,9 @@
-const { google } = require("googleapis");
-const path = require("path");
 const fs = require("fs");
-
-const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(__dirname, "../credentials/google-drive.json"),
-  scopes: ["https://www.googleapis.com/auth/drive.readonly"]
-});
-
-const drive = google.drive({ version: "v3", auth });
+const { getOAuthDrive } = require("./drive.oauth");
 
 async function downloadFile(fileId, destPath) {
+  const drive = getOAuthDrive();
+
   const res = await drive.files.get(
     { fileId, alt: "media" },
     { responseType: "stream" }
