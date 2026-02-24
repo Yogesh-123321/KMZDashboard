@@ -8,7 +8,20 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
 const fileUpload = require("express-fileupload");
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",   // local dev frontend
+      "https://your-frontend-domain.com" // later production frontend
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  })
+);
+
+// Explicitly handle preflight
+app.options("*", cors());
 app.use(express.json());
 app.use(
   fileUpload({
