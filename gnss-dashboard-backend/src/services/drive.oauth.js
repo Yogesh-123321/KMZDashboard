@@ -1,24 +1,24 @@
-const fs = require("fs");
-const path = require("path");
 const { google } = require("googleapis");
 
-const CREDENTIALS_PATH = path.join(__dirname, "../credentials/oauth-client.json");
-const TOKEN_PATH = path.join(__dirname, "../credentials/token.json");
-
 function getOAuthDrive() {
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-  const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
+  const {
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REFRESH_TOKEN
+  } = process.env;
 
-  const { client_secret, client_id, redirect_uris } =
-    credentials.installed;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
+    throw new Error("Missing Google OAuth environment variables");
+  }
 
   const oAuth2Client = new google.auth.OAuth2(
-    client_id,
-    client_secret,
-    redirect_uris[0]
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET
   );
 
-  oAuth2Client.setCredentials(token);
+  oAuth2Client.setCredentials({
+    refresh_token: GOOGLE_REFRESH_TOKEN
+  });
 
   return google.drive({
     version: "v3",

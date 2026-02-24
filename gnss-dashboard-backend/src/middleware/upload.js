@@ -2,7 +2,8 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const uploadDir = path.join(__dirname, "../uploads/kmz");
+/* 🔥 Use /tmp for Render */
+const uploadDir = path.join("/tmp", "kmz");
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
