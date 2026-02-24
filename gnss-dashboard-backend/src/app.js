@@ -5,7 +5,7 @@ const healthRoutes = require("./routes/health.route");
 const filesRoutes = require("./routes/files.route");
 const kmzRoutes = require("./routes/kmz.route");
 const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
-const fileUpload = require("express-fileupload");
+// const fileUpload = require("express-fileupload");
 const app = express();
 
 app.use(
@@ -21,12 +21,12 @@ app.use(
 );
 
 app.use(express.json());
-app.use(
-  fileUpload({
-   useTempFiles: true,
-    tempFileDir: "/tmp/"
-  })
-);
+// app.use(
+//   fileUpload({
+//    useTempFiles: true,
+//     tempFileDir: "/tmp/"
+//   })
+// );
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/admin/users", require("./routes/adminUsers"));
 app.use("/api/assignments", require("./routes/assignments"));
