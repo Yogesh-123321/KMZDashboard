@@ -24,7 +24,7 @@ function collectPlacemarks(node, out = []) {
 
 /**
  * Recursively find ALL gx:Track objects
- * (handles MultiGeometry, folders, photo exports)
+ * (handles MultiGeometry, folders)
  */
 function findGxTracks(node, out = []) {
   if (!node || typeof node !== "object") return out;
@@ -79,6 +79,20 @@ function parseLineString(coordsNode) {
     .filter(Boolean);
 }
 
+/**
+ * Convert KML color (aabbggrr) → Leaflet hex (#rrggbb)
+ */
+function convertKmlColor(kmlColor) {
+  if (!kmlColor || kmlColor.length !== 8) return "#3388ff";
+
+  // Format = aabbggrr
+  const rr = kmlColor.slice(6, 8);
+  const gg = kmlColor.slice(4, 6);
+  const bb = kmlColor.slice(2, 4);
+
+  return `#${rr}${gg}${bb}`;
+}
+
 /* ───────── Main Parser ───────── */
 
 function parseKml(kmlPath) {
@@ -91,7 +105,6 @@ function parseKml(kmlPath) {
 
   const json = parser.parse(xml);
 
-  // 🔍 Collect everything
   const placemarks = collectPlacemarks(json.kml);
 
   const tracks = [];
@@ -105,21 +118,37 @@ function parseKml(kmlPath) {
       const coords = parseGxTrack(t);
       if (coords.length > 1) {
         tracks.push({
-          name: pm.name || "Track Session 1",
+          name: pm.name || "Track Session",
           coordinates: coords,
-          source: "gx:Track"
+          source: "gx:Track",
+          color: "#3388ff",
+          width: 3
         });
       }
     }
 
-    /* ───── EDITED TRACK (LineString) ───── */
+    /* ───── LineString TRACK (with inline Style) ───── */
     if (pm.LineString?.coordinates) {
       const coords = parseLineString(pm.LineString.coordinates);
+
       if (coords.length > 1) {
+        let color = "#3388ff"; // default
+        let width = 3;
+
+        if (pm.Style?.LineStyle?.color) {
+          color = convertKmlColor(pm.Style.LineStyle.color);
+        }
+
+        if (pm.Style?.LineStyle?.width) {
+          width = Number(pm.Style.LineStyle.width);
+        }
+
         tracks.push({
-          name: pm.name || "Edited Track",
+          name: pm.name || "LineString Track",
           coordinates: coords,
-          source: "LineString"
+          source: "LineString",
+          color,
+          width
         });
       }
     }
@@ -131,22 +160,28 @@ function parseKml(kmlPath) {
         .split(",")
         .map(Number);
 
-      points.push({
-        name: pm.name || "Point",
-        lat,
-        lon,
-        ele: ele ?? 0,
-        imageFile:
-          pm.name && pm.name.startsWith("Photo @")
-            ? `${pm.name.replace("Photo @", "").trim()}.jpg`
-            : null
-      });
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        points.push({
+          name: pm.name || "Point",
+          lat,
+          lon,
+          ele: ele ?? 0,
+          imageFile:
+            pm.name && pm.name.startsWith("Photo @")
+              ? `${pm.name.replace("Photo @", "").trim()}.jpg`
+              : null
+        });
+      }
     }
   }
 
   console.log("PARSED TRACK COUNT:", tracks.length);
 
-  return { tracks, points };
+if (tracks.length > 0) {
+  console.log("TRACK SAMPLE:", tracks[0]);
+}
+
+return { tracks, points };
 }
 
 module.exports = { parseKml };

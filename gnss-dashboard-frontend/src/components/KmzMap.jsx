@@ -155,16 +155,30 @@ const isDraggingRef = useRef(false);
 const suppressClickRef = useRef(false);
 const isDark =
   document.documentElement.classList.contains("dark");
-
+console.log("TRACKS FROM BACKEND:", tracks);
 /* 🔵 Original tracks */
 const originalTracks = useMemo(() => {
   return (tracks || [])
-    .map(t => ({
-      name: t.name,
-      path: (t.coordinates || [])
-        .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
-        .map(p => [p.lat, p.lon])
-    }))
+    .map(t => {
+      let displayColor = t.color || "#3388ff";
+
+      if (t.name?.toLowerCase().includes("reference")) {
+        displayColor = "#2563eb"; // Blue
+      }
+
+      if (t.name?.toLowerCase().includes("recorded")) {
+        displayColor = "#dc2626"; // Red
+      }
+
+      return {
+        name: t.name,
+        color: displayColor,
+        width: t.width || 4,
+        path: (t.coordinates || [])
+          .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+          .map(p => [p.lat, p.lon])
+      };
+    })
     .filter(t => t.path.length > 1);
 }, [tracks]);
 
@@ -218,8 +232,10 @@ const activeEditedTrack =
         <Polyline
           key={`original-${i}`}
           positions={t.path}
-          pathOptions={{ color: "#2563eb", weight: 4 }}
-        />
+          pathOptions={{
+            color: t.color,
+            weight: t.width
+          }} />
       ))}
 
       {/* 🟧 EDITED TRACKS (EDITABLE) */}

@@ -52,40 +52,99 @@ function App() {
   /* ---------- DASHBOARD LAYOUT ---------- */
   const DashboardLayout = () => (
     <div className="h-screen flex flex-col bg-background text-foreground">
-      <header className="relative z-40 flex items-center justify-between px-6 py-4 border-b">
+      <header className="relative z-40 flex items-center justify-between px-6 py-4 border-b bg-background">
+
+        {/* LEFT SIDE NAV */}
         <div className="flex items-center gap-6">
           <h1 className="text-2xl font-semibold">GNSS Dashboard</h1>
 
           {(role === "ADMIN" || role === "ROLE_5") && (
-            <>
+            <div className="flex items-center gap-6">
+
               {role === "ADMIN" && (
                 <>
-                  <button onClick={() => setAdminPage("upload")}>
+                  {/* Upload */}
+                  <button
+                    onClick={() => setAdminPage("upload")}
+                    className={`relative pb-2 text-sm font-medium transition-colors ${
+                      adminPage === "upload"
+                        ? "text-blue-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
                     Upload and Edit Survey
+                    {adminPage === "upload" && (
+                      <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+                    )}
                   </button>
 
-                  <button onClick={() => setAdminPage("assign")}>
+                  {/* Assign */}
+                  <button
+                    onClick={() => setAdminPage("assign")}
+                    className={`relative pb-2 text-sm font-medium transition-colors ${
+                      adminPage === "assign"
+                        ? "text-blue-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
                     Assign Survey
+                    {adminPage === "assign" && (
+                      <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+                    )}
                   </button>
 
-                  <button onClick={() => setAdminPage("surveyors")}>
+                  {/* Surveyors */}
+                  <button
+                    onClick={() => setAdminPage("surveyors")}
+                    className={`relative pb-2 text-sm font-medium transition-colors ${
+                      adminPage === "surveyors"
+                        ? "text-blue-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
                     Manage Surveyors
+                    {adminPage === "surveyors" && (
+                      <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+                    )}
                   </button>
 
-                  <button onClick={() => setAdminPage("status")}>
+                  {/* Status */}
+                  <button
+                    onClick={() => setAdminPage("status")}
+                    className={`relative pb-2 text-sm font-medium transition-colors ${
+                      adminPage === "status"
+                        ? "text-blue-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
                     Field Survey Status
+                    {adminPage === "status" && (
+                      <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+                    )}
                   </button>
                 </>
               )}
 
-              <button onClick={() => setAdminPage("approval")}>
+              {/* Approval (Visible to ADMIN + ROLE_5) */}
+              <button
+                onClick={() => setAdminPage("approval")}
+                className={`relative pb-2 text-sm font-medium transition-colors ${
+                  adminPage === "approval"
+                    ? "text-blue-600"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
                 Approval Queue
+                {adminPage === "approval" && (
+                  <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+                )}
               </button>
-            </>
+
+            </div>
           )}
         </div>
 
-        {/* NAVBAR RIGHT */}
+        {/* RIGHT SIDE */}
         <div className="flex items-center gap-4 relative">
           <ThemeToggle />
 
@@ -117,6 +176,7 @@ function App() {
         </div>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden">
         {(role === "ADMIN" || role === "ROLE_5") ? (
           <>
@@ -126,7 +186,6 @@ function App() {
               <ManageSurveyors onOpenProfile={openSurveyorProfile} />
             )}
             {role === "ADMIN" && adminPage === "status" && <FieldSurveyStatus />}
-
             {adminPage === "approval" && <ApprovalPage />}
           </>
         ) : selectedAssignment ? (
@@ -139,7 +198,7 @@ function App() {
         )}
       </main>
 
-      {/* GLOBAL PROFILE MODAL */}
+      {/* PROFILE MODAL */}
       {surveyorProfileOpen && surveyorProfile && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-card border rounded-2xl shadow-xl w-[460px] p-6 space-y-4">
@@ -181,12 +240,10 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<AboutUs />} />
-
         <Route
           path="/login"
           element={<Login onLogin={() => setLoggedIn(true)} />}
         />
-
         <Route
           path="/dashboard"
           element={

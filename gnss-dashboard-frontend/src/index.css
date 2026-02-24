@@ -153,3 +153,7 @@ html, body, * {
 *::-webkit-scrollbar-thumb:hover {
   background: rgba(37,99,235,1);
 }
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}

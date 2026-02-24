@@ -38,15 +38,37 @@ const AssignmentSchema = new mongoose.Schema(
 
     /* BLUE TRACK (KMZ reference track) */
     referenceTrack: {
-      type: [TrackPointSchema],
-      default: []
-    },
+  type: [[TrackPointSchema]],   // 🔥 segmented
+  default: []
+},
 
     /* RED TRACK (recorded GNSS path) */
     recordedTrack: {
-      type: [TrackPointSchema],
+      type: [[TrackPointSchema]],   // 🔥 change this
       default: []
+    },
+   submittedKmzPath: String,
+    photos: [
+  {
+    lat: Number,
+    lon: Number,
+    imageUrl: String,
+    timestamp: Number,
+    description: String   // 🔥 NEW
+  }
+],
+
+    submissionVersion: {
+      type: Number,
+      default: 1
+    },
+    /* CACHED DEVIATION RESULTS */
+    deviationAnalyses: {
+      type: Map,
+      of: mongoose.Schema.Types.Mixed,
+      default: {}
     }
+
   },
   { timestamps: true }
 );

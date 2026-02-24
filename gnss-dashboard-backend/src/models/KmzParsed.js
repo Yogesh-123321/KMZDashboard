@@ -8,6 +8,9 @@ const coordinateSchema = new mongoose.Schema({
 
 const trackSchema = new mongoose.Schema({
   name: String,
+  source: String,
+  color: String,
+  width: Number,
   coordinates: [coordinateSchema]
 }, { _id: false });
 
@@ -16,9 +19,8 @@ const pointSchema = new mongoose.Schema({
   lat: Number,
   lon: Number,
   ele: Number,
-  imageFile: String   // ✅ REQUIRED
+  imageFile: String
 }, { _id: false });
-
 
 const kmzParsedSchema = new mongoose.Schema(
   {

@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(
   fileUpload({
-    useTempFiles: true,
+   useTempFiles: true,
     tempFileDir: "/tmp/"
   })
 );
@@ -23,6 +23,10 @@ app.use("/api/health", healthRoutes);
 app.use("/api/files", filesRoutes);
 app.use("/api/kmz", kmzRoutes);
 app.use("/kmz-images", express.static("public/kmz-images"));
+app.use(
+  "/submitted-kmz",
+  express.static("public/submitted-kmz")
+);
 app.use("/api/explorer", require("./routes/explorer.routes"));
 
 module.exports = app;

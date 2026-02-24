@@ -11,28 +11,13 @@ async function getKmzTrackFromSurveyId(surveyId) {
       return [];
     }
 
-    let chosenTrack = null;
-
-// Prefer edited track
-chosenTrack = parsed.tracks.find(t => t.name?.includes("Edited Track"));
-
-// fallback to original static track
-if (!chosenTrack) {
-  chosenTrack = parsed.tracks.find(t => t.name?.includes("Original"));
-}
-
-// fallback to first track
-if (!chosenTrack) {
-  chosenTrack = parsed.tracks[0];
-}
-
-if (!chosenTrack) return [];
-
-return chosenTrack.coordinates.map(p => ({
-  lat: p.lat,
-  lon: p.lon
-}));
-
+    // Return array of segments
+    return parsed.tracks.map(track =>
+      (track.coordinates || []).map(p => ({
+        lat: p.lat,
+        lon: p.lon
+      }))
+    );
 
   } catch (err) {
     console.error("KMZ TRACK LOAD ERROR:", err);
