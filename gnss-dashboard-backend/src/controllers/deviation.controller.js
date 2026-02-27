@@ -1,49 +1,93 @@
 const Assignment = require("../models/Assignment");
 
-const R = 6378137;
+const R = 6378137; // Earth radius (meters)
 
-/* ───────── Lat/Lon to Cartesian ───────── */
+/* ───────── Lat/Lon → Local Cartesian (meters) ───────── */
 function latLonToXY(lat, lon, refLat) {
-  const x = (lon * Math.PI / 180) * R * Math.cos(refLat * Math.PI / 180);
-  const y = (lat * Math.PI / 180) * R;
+  const x =
+    (lon * Math.PI / 180) *
+    R *
+    Math.cos(refLat * Math.PI / 180);
+
+  const y =
+    (lat * Math.PI / 180) *
+    R;
+
   return { x, y };
 }
 
-/* ───────── Distance from Point to Segment ───────── */
+/* ───────── Cartesian → Lat/Lon ───────── */
+function xyToLatLon(x, y, refLat) {
+  const lat =
+    (y / R) * (180 / Math.PI);
+
+  const lon =
+    (x / (R * Math.cos(refLat * Math.PI / 180))) *
+    (180 / Math.PI);
+
+  return { lat, lon };
+}
+
+/* ───────── Point → Segment Distance (with projection) ───────── */
 function pointToSegmentDistance(p, a, b) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
 
+  // Degenerate segment (A == B)
   if (dx === 0 && dy === 0) {
-    return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
+    const distance = Math.sqrt(
+      (p.x - a.x) ** 2 +
+      (p.y - a.y) ** 2
+    );
+
+    return {
+      distance,
+      projX: a.x,
+      projY: a.y
+    };
   }
 
+  // Projection factor
   const t =
-    ((p.x - a.x) * dx + (p.y - a.y) * dy) /
+    ((p.x - a.x) * dx +
+     (p.y - a.y) * dy) /
     (dx * dx + dy * dy);
 
+  // Clamp projection to segment
   const tClamped = Math.max(0, Math.min(1, t));
 
   const projX = a.x + tClamped * dx;
   const projY = a.y + tClamped * dy;
 
-  return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
+  const distance = Math.sqrt(
+    (p.x - projX) ** 2 +
+    (p.y - projY) ** 2
+  );
+
+  return {
+    distance,
+    projX,
+    projY
+  };
 }
 
-/* ───────── Deviation Analysis ───────── */
+/* ───────── Deviation Analysis Controller ───────── */
 exports.getDeviationAnalysis = async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
-      return res.status(404).json({ message: "Assignment not found" });
+      return res.status(404).json({
+        message: "Assignment not found"
+      });
     }
 
     const threshold = Number(req.query.threshold || 3);
     const thresholdKey = String(threshold);
 
-    // ✅ VALIDATE CACHE STRUCTURE BEFORE USING
-    const cached = assignment.deviationAnalyses?.get?.(thresholdKey);
+    /* ───────── Cache Check ───────── */
+    const cached =
+      assignment.deviationAnalyses?.get(thresholdKey);
 
     if (
       cached &&
@@ -71,6 +115,7 @@ exports.getDeviationAnalysis = async (req, res) => {
     let sumDeviation = 0;
     let deviatedPoints = 0;
 
+    /* ───────── Main Comparison Loop ───────── */
     for (const recSeg of recSegments) {
       for (const recPoint of recSeg) {
 
@@ -80,10 +125,17 @@ exports.getDeviationAnalysis = async (req, res) => {
         ) continue;
 
         const refLat = recPoint.lat;
-        const pXY = latLonToXY(recPoint.lat, recPoint.lon, refLat);
+
+        const pXY = latLonToXY(
+          recPoint.lat,
+          recPoint.lon,
+          refLat
+        );
 
         let minDist = Infinity;
+        let bestProjection = null;
 
+        // Compare against ALL reference segments
         for (const refSeg of refSegments) {
           for (let j = 0; j < refSeg.length - 1; j++) {
 
@@ -99,13 +151,17 @@ exports.getDeviationAnalysis = async (req, res) => {
               refLat
             );
 
-            const dist = pointToSegmentDistance(pXY, a, b);
+            const result =
+              pointToSegmentDistance(pXY, a, b);
 
-            if (dist < minDist) minDist = dist;
+            if (result.distance < minDist) {
+              minDist = result.distance;
+              bestProjection = result;
+            }
           }
         }
 
-        if (!isFinite(minDist)) continue;
+        if (!isFinite(minDist) || !bestProjection) continue;
 
         const isDeviated = minDist > threshold;
 
@@ -114,11 +170,23 @@ exports.getDeviationAnalysis = async (req, res) => {
 
         sumDeviation += minDist;
 
+        // Convert projected XY back to Lat/Lon
+        const projectedLatLon =
+          xyToLatLon(
+            bestProjection.projX,
+            bestProjection.projY,
+            refLat
+          );
+
         deviations.push({
           lat: recPoint.lat,
           lon: recPoint.lon,
           deviation: minDist,
-          deviated: isDeviated
+          deviated: isDeviated,
+
+          // 🔹 NEW FIELDS
+          projectedLat: projectedLatLon.lat,
+          projectedLon: projectedLatLon.lon
         });
       }
     }
@@ -126,7 +194,9 @@ exports.getDeviationAnalysis = async (req, res) => {
     const totalPoints = deviations.length;
 
     const avgDeviation =
-      totalPoints > 0 ? sumDeviation / totalPoints : 0;
+      totalPoints > 0
+        ? sumDeviation / totalPoints
+        : 0;
 
     const deviationPercent =
       totalPoints > 0
@@ -144,12 +214,16 @@ exports.getDeviationAnalysis = async (req, res) => {
       computedAt: new Date()
     };
 
-    // ✅ STORE CLEAN CACHE
+    /* ───────── Cache Store ───────── */
     if (!assignment.deviationAnalyses) {
       assignment.deviationAnalyses = new Map();
     }
 
-    assignment.deviationAnalyses.set(thresholdKey, result);
+    assignment.deviationAnalyses.set(
+      thresholdKey,
+      result
+    );
+
     await assignment.save();
 
     res.json({

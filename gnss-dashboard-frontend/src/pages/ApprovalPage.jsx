@@ -9,7 +9,16 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
 
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 /* ───────── Auto Fit Bounds ───────── */
@@ -91,9 +100,11 @@ function DeviationGauge({ percent }) {
 
 /* ───────── Approval Map ───────── */
 function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
+  const [selectedDeviation, setSelectedDeviation] = useState(null);
   const normalize = (p) => {
     const lat = Number(p.lat);
     const lon = Number(p.lon);
+    
     if (isNaN(lat) || isNaN(lon)) return null;
     return [lat, lon];
   };
@@ -179,22 +190,74 @@ function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
 
         return (
           <Marker
-            key={i}
-            position={coord}
-            icon={L.divIcon({
-              html: `
-                <div style="
-                  width:12px;
-                  height:12px;
-                  background:${color};
-                  border:2px solid black;
-                  border-radius:50%;
-                "></div>
-              `
-            })}
-          />
+  key={i}
+  position={coord}
+  eventHandlers={{
+    click: () => {
+      console.log("Clicked deviation:", p);
+      setSelectedDeviation(p);
+    }
+  }}
+  icon={L.divIcon({
+    html: `
+      <div style="
+        width:12px;
+        height:12px;
+        background:${color};
+        border:2px solid black;
+        border-radius:50%;
+        cursor:pointer;
+      "></div>
+    `
+  })}
+/>
         );
       })}
+      {selectedDeviation &&
+ selectedDeviation.projectedLat &&
+ selectedDeviation.projectedLon && (
+  <>
+    <Polyline
+      positions={[
+        [selectedDeviation.lat, selectedDeviation.lon],
+        [
+          selectedDeviation.projectedLat,
+          selectedDeviation.projectedLon
+        ]
+      ]}
+      pathOptions={{
+        color: "green",
+        dashArray: "6,6",
+        weight: 3
+      }}
+    />
+
+    <Marker
+      position={[
+        selectedDeviation.projectedLat,
+        selectedDeviation.projectedLon
+      ]}
+      icon={L.divIcon({
+        html: `
+          <div style="
+            width:10px;
+            height:10px;
+            background:green;
+            border-radius:50%;
+            border:2px solid white;
+          "></div>
+        `
+      })}
+    >
+      <Popup>
+        <div>
+          <strong>Deviation:</strong><br/>
+          {selectedDeviation.deviation?.toFixed(2)} m
+        </div>
+      </Popup>
+    </Marker>
+  </>
+)}
       {/* 📷 Photo Markers */}
 {photos.map((photo, i) => {
   const coord = normalize(photo);
@@ -255,39 +318,49 @@ const [aiAnalysis, setAiAnalysis] = useState(null);
   }
 
   async function loadMapData(id, th) {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    const trackRes = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/track`,
-      { headers: { Authorization: "Bearer " + token } }
-    );
-    setTrackData(await trackRes.json());
-
-    const devRes = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/deviation-analysis?threshold=${th}`,
-      { headers: { Authorization: "Bearer " + token } }
-    );
-
-    if (devRes.ok) {
-      setDeviationData(await devRes.json());
-    }
-    const aiRes = await fetch(
-  `${API_BASE_URL}/api/assignments/${id}/ai-analysis?threshold=${th}`,
-  { headers: { Authorization: "Bearer " + token } }
-);
-
-if (aiRes.ok) {
-  const aiJson = await aiRes.json();
-  setAiAnalysis(aiJson.aiAnalysis);
-}
-  }
-
-  async function approveAssignment(id) {
-
-  const finalName = window.prompt(
-    "Enter final file name (without .kmz extension):"
+  // 1️⃣ TRACK
+  const trackRes = await fetch(
+    `${API_BASE_URL}/api/assignments/${id}/track`,
+    { headers: { Authorization: "Bearer " + token } }
   );
 
+  setTrackData(await trackRes.json());
+
+  // 2️⃣ DEVIATION
+  const devRes = await fetch(
+    `${API_BASE_URL}/api/assignments/${id}/deviation-analysis?threshold=${th}`,
+    { headers: { Authorization: "Bearer " + token } }
+  );
+
+  if (!devRes.ok) {
+    setDeviationData(null);
+    setAiAnalysis(null);
+    return;   // 🚨 STOP HERE if deviation failed
+  }
+
+  const devJson = await devRes.json();
+  setDeviationData(devJson);
+
+  // 3️⃣ AI (ONLY AFTER DEVIATION SUCCESS)
+  const aiRes = await fetch(
+    `${API_BASE_URL}/api/assignments/${id}/ai-analysis?threshold=${th}`,
+    { headers: { Authorization: "Bearer " + token } }
+  );
+
+  if (aiRes.ok) {
+    const aiJson = await aiRes.json();
+    setAiAnalysis(aiJson.aiAnalysis);
+  } else {
+    setAiAnalysis(null);
+  }
+}
+
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+const [finalFileName, setFinalFileName] = useState("");
+
+async function approveAssignment(id, finalName) {
   if (!finalName || !finalName.trim()) {
     alert("Final file name is required");
     return;
@@ -316,10 +389,9 @@ if (aiRes.ok) {
     return;
   }
 
-  alert("Assignment approved successfully");
-
-  await loadAssignments();
+  setApproveDialogOpen(false);
   setSelectedAssignment(null);
+  await loadAssignments();
 }
 
   async function rejectAssignment(id) {
@@ -518,23 +590,25 @@ key={
 
                 {/* ACTION BUTTONS — UNCHANGED */}
                 <div className="mt-auto space-y-3">
-                  <button
-                    onClick={() =>
-                      approveAssignment(selectedAssignment._id)
-                    }
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
-                  >
-                    Approve
-                  </button>
+                  <Button
+  className="w-full"
+  onClick={() => {
+    const baseName = selectedAssignment.surveyName.replace(".kmz", "");
+    setFinalFileName(`Approved_${baseName}`);
+    setApproveDialogOpen(true);
+  }}
+>
+  Approve
+</Button>
 
-                  <button
-                    onClick={() =>
-                      rejectAssignment(selectedAssignment._id)
-                    }
-                    className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg"
-                  >
-                    Reject (Back to Pending)
-                  </button>
+                 <button
+  onClick={() =>
+    rejectAssignment(selectedAssignment._id)
+  }
+  className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg"
+>
+  Reject & Return to Surveyor
+</button>
                 </div>
 
               </div>
@@ -543,6 +617,49 @@ key={
           </div>
         </div>
       )}
+      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>Approve Assignment</DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground">
+        Enter final KMZ file name
+      </div>
+
+      <Input
+        value={finalFileName}
+        onChange={(e) => setFinalFileName(e.target.value)}
+        placeholder="Final file name"
+      />
+
+      <div className="text-xs text-muted-foreground">
+        Final file will be saved as: <b>{finalFileName}.kmz</b>
+      </div>
+    </div>
+
+    <DialogFooter className="gap-2">
+      <Button
+        variant="outline"
+        onClick={() => setApproveDialogOpen(false)}
+      >
+        Cancel
+      </Button>
+
+      <Button
+        onClick={() =>
+          approveAssignment(
+            selectedAssignment._id,
+            finalFileName
+          )
+        }
+      >
+        Confirm Approval
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </div>
   );
 }

@@ -18,9 +18,23 @@ router.post(
   requirePermission("ASSIGN_SURVEY"),
   async (req, res) => {
     try {
+
       const { surveyId, surveyName, userId } = req.body;
 
-      const referenceTrack = await getKmzTrackFromSurveyId(surveyId);
+      // ✅ STEP 1: Check duplicate
+      const existingAssignment = await Assignment.findOne({
+        surveyId,
+        assignedTo: userId
+      });
+
+      if (existingAssignment) {
+        return res.status(400).json({
+          error: "This survey is already assigned to this user."
+        });
+      }
+
+      const referenceTrack =
+        await getKmzTrackFromSurveyId(surveyId);
 
       const assignment = await Assignment.create({
         surveyId,
