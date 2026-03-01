@@ -34,9 +34,9 @@
   --ring: 217 91% 60%;
 
   --radius: 0.75rem;
-  --height: 100%;
-  --margin: 0;
 }
+
+/* ───────── Dark Mode Variables ───────── */
 
 .dark {
   --background: 222.2 84% 4.9%;
@@ -67,74 +67,40 @@
   --input: 217.2 32.6% 17.5%;
   --ring: 217 91% 60%;
 }
-/* Base body styles */
+
+/* ───────── Base Layout ───────── */
 
 @layer base {
-
   body {
     @apply bg-background text-foreground;
   }
 }
-/* Sidebar scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.4);
-  border-radius: 6px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.6);
-}
-.image-thumb-marker {
-  background: transparent;
-  border: none;
-}
-
-.thumb-wrapper {
-  width: 42px;
-  height: 42px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 2px solid rgba(59, 130, 246, 0.9); /* blue border */
-  background: #000;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-}
-
-.thumb-wrapper img {
-  width: 100%;
+html,
+body,
+#root {
   height: 100%;
-  object-fit: cover;
+  margin: 0;
 }
 
-/* Ensure shadcn Dialog appears above Leaflet */
-[data-radix-popper-content-wrapper],
-[data-radix-portal] {
-  z-index: 9999 !important;
+html {
+  scroll-behavior: smooth;
 }
-/* Prevent Leaflet from overlapping modals */
-.leaflet-container {
-  z-index: 0 !important;
+html {
+  overflow-y: scroll;
 }
-/* ───────── GLOBAL SCROLLBAR ───────── */
+/* ───────── Global Scrollbar (GNSS Theme) ───────── */
 
-/* ───────── GLOBAL SCROLLBAR ───────── */
-
-html, body, * {
+/* Firefox */
+* {
   scrollbar-width: thin;
   scrollbar-color: rgba(59,130,246,0.7) transparent;
 }
 
-/* Apply to ALL scrollable containers */
+/* Chrome / Edge / Safari */
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 *::-webkit-scrollbar-track {
@@ -153,7 +119,88 @@ html, body, * {
 *::-webkit-scrollbar-thumb:hover {
   background: rgba(37,99,235,1);
 }
-html, body, #root {
+
+/* ───────── Image Thumbnail Marker (Leaflet) ───────── */
+
+.image-thumb-marker {
+  background: transparent;
+  border: none;
+}
+
+.thumb-wrapper {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid rgba(59, 130, 246, 0.9);
+  background: #000;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.thumb-wrapper img {
+  width: 100%;
   height: 100%;
-  margin: 0;
+  object-fit: cover;
+}
+
+/* ───────── Dialog + Leaflet Z-Index Fix ───────── */
+
+[data-radix-popper-content-wrapper],
+[data-radix-portal] {
+  z-index: 9999 !important;
+}
+
+.leaflet-container {
+  z-index: 0 !important;
+}
+
+/* ───────── Live Surveyor Dot Styles ───────── */
+
+.live-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.live-dot.online {
+  background-color: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+.live-dot.offline {
+  background-color: #9ca3af;
+  box-shadow: 0 0 4px #9ca3af;
+}
+
+.live-dot.warning {
+  background-color: red;
+  box-shadow: 0 0 8px red;
+}
+
+/* ───────── Blinking Animation (Deviation Warning) ───────── */
+
+@keyframes blinkWarning {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.live-dot.blink {
+  animation: blinkWarning 1s infinite ease-in-out;
+}
+
+/* ───────── Global Spinner Animation ───────── */
+
+@keyframes spinSmooth {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.global-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255,255,255,0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spinSmooth 1s linear infinite;
 }

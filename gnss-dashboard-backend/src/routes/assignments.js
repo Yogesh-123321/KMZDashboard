@@ -11,6 +11,7 @@ const { getAIAnalysis } = require("../controllers/aiController");
 const upload = require("../middleware/upload");
 const { submitKmz } = require("../controllers/assignmentController");
 const { uploadKmzCopy } = require("../services/drive.upload.js");
+const { calculateMinDistance } = require("../utils/geoDistance");
 /* ───────── ASSIGN SURVEY ───────── */
 router.post(
   "/assign",
@@ -420,5 +421,139 @@ router.post(
   verifyToken,
   upload.single("kmz"),
   submitKmz
+);
+router.get(
+  "/live-surveyors",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const role = req.user.role;
+
+      if (role !== "ADMIN" && role !== "ROLE_5") {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+
+      const AuthUser = require("../models/AuthUser");
+
+      const TWO_MINUTES = 2 * 60 * 1000;
+      const cutoff = new Date(Date.now() - TWO_MINUTES);
+
+      const surveyors = await AuthUser.find({})
+        .select("username role lastLocation lastLocationAt activeAssignment isActive")
+        .populate("activeAssignment", "surveyName status");
+
+      const result = surveyors.map(user => {
+
+        const recentlyUpdated =
+          user.lastLocationAt &&
+          user.lastLocationAt >= cutoff;
+
+        const online =
+          user.isActive && recentlyUpdated;
+
+        return {
+          ...user.toObject(),
+          online   // 🔥 computed field
+        };
+      });
+
+      res.json(result);
+
+    } catch (err) {
+      console.error("LIVE SURVEYORS ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+router.get(
+  "/live-surveyors/:userId/proximity",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const role = req.user.role;
+
+      if (role !== "ADMIN" && role !== "ROLE_5") {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+
+      const { userId } = req.params;
+
+      const AuthUser = require("../models/AuthUser");
+
+      const user = await AuthUser.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "Surveyor not found" });
+      }
+
+      if (!user.lastLocation?.lat || !user.lastLocation?.lng) {
+        return res.status(400).json({
+          error: "Surveyor has no live location"
+        });
+      }
+
+      // 🔥 Normalize user location (convert lng → lon)
+      const userPoint = {
+        lat: user.lastLocation.lat,
+        lon: user.lastLocation.lng
+      };
+
+      const assignments = await Assignment.find({
+        assignedTo: userId,
+        status: { $in: ["pending", "in_progress"] }
+      }).select("surveyName referenceTrack status");
+
+      if (!assignments.length) {
+        return res.json({
+          nearestAssignment: null,
+          minDistance: null,
+          message: "No active assignments"
+        });
+      }
+
+      let results = [];
+
+      for (const assignment of assignments) {
+
+        if (!assignment.referenceTrack || !assignment.referenceTrack.length) {
+          continue;
+        }
+
+        const minDistance = calculateMinDistance(
+          userPoint,
+          assignment.referenceTrack
+        );
+
+        results.push({
+          assignmentId: assignment._id,
+          surveyName: assignment.surveyName,
+          status: assignment.status,
+          minDistance: Math.round(minDistance)
+        });
+      }
+
+      if (!results.length) {
+        return res.json({
+          nearestAssignment: null,
+          minDistance: null,
+          message: "No valid reference tracks"
+        });
+      }
+
+      // Sort by nearest
+      results.sort((a, b) => a.minDistance - b.minDistance);
+
+      res.json({
+        nearestAssignment: results[0],
+        allAssignments: results
+      });
+
+    } catch (err) {
+      console.error("PROXIMITY ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 );
 module.exports = router;

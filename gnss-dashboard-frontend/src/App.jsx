@@ -29,10 +29,24 @@ function App() {
   const role = localStorage.getItem("role");
   const username = localStorage.getItem("username");
 
-  const handleLogout = () => {
-    localStorage.clear();
-    setLoggedIn(false);
-  };
+ const handleLogout = async () => {
+  try {
+    await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/api/auth/logout`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token")
+        }
+      }
+    );
+  } catch (err) {
+    console.error("Logout error:", err);
+  }
+
+  localStorage.clear();
+  setLoggedIn(false);
+};
 
   async function openSurveyorProfile(userId) {
     const res = await fetch(

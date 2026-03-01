@@ -125,7 +125,7 @@ async function openProfile(user) {
   /* ---------------- UI ---------------- */
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="h-full flex flex-col p-6 space-y-6 overflow-hidden">
       <div className="text-xl font-semibold">Manage Surveyors</div>
 
       {/* ADD USER */}
@@ -287,8 +287,7 @@ async function openProfile(user) {
       {/* PROFILE MODAL */}
      {profileOpen && selectedUser && (
   <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div className="bg-card text-card-foreground border rounded-2xl shadow-xl w-[460px] overflow-hidden">
-
+<div className="bg-card text-card-foreground border rounded-2xl shadow-2xl w-[900px] max-h-[90vh] overflow-hidden flex flex-col">
       {/* HEADER */}
       <div className="px-6 py-4 border-b flex justify-between items-center">
         <div>
@@ -306,38 +305,108 @@ async function openProfile(user) {
       </div>
 
       {/* CONTENT */}
-      <div className="p-6 space-y-5">
+<div className="p-6 space-y-6 overflow-y-auto">
+  {/* ATTENDANCE SECTION */}
+<div className="grid grid-cols-3 gap-4">
 
+  <div className="border rounded-xl p-4 bg-green-500/10 border-green-500/30">
+    <div className="text-xs text-green-400">Status</div>
+    <div className={`text-lg font-semibold ${
+      selectedUser.isActive ? "text-green-500" : "text-gray-400"
+    }`}>
+      {selectedUser.isActive ? "Online" : "Offline"}
+    </div>
+  </div>
+
+  <div className="border rounded-xl p-4 bg-blue-500/10 border-blue-500/30">
+    <div className="text-xs text-blue-400">Last Active</div>
+    <div className="text-sm">
+      {selectedUser.lastLocationAt
+        ? new Date(selectedUser.lastLocationAt).toLocaleString()
+        : "No activity"}
+    </div>
+  </div>
+
+  <div className="border rounded-xl p-4 bg-purple-500/10 border-purple-500/30">
+    <div className="text-xs text-purple-400">Today Work</div>
+    <div className="text-lg font-semibold">
+      {selectedUser.todayWorkMinutes} min
+    </div>
+  </div>
+
+</div>
         {/* STATS GRID */}
-<div className="grid grid-cols-2 gap-3">
+<div className="grid grid-cols-4 gap-4">
 
-  <div className="border rounded-lg p-3 bg-purple-500/10 border-purple-500/30">
+  <div className="border rounded-lg p-4 bg-purple-500/10 border-purple-500/30">
     <div className="text-xs text-purple-400">Total Assigned</div>
     <div className="text-xl font-semibold">{selectedUser.assignedCount}</div>
   </div>
 
-  <div className="border rounded-lg p-3 bg-red-500/10 border-red-500/30">
+  <div className="border rounded-lg p-4 bg-red-500/10 border-red-500/30">
     <div className="text-xs text-red-400">Pending</div>
     <div className="text-xl font-semibold">{selectedUser.pendingCount}</div>
   </div>
 
-  <div className="border rounded-lg p-3 bg-blue-500/10 border-blue-500/30">
-    <div className="text-xs text-blue-400">In Progress</div>
-    <div className="text-xl font-semibold">{selectedUser.inProgressCount}</div>
-  </div>
-
-  <div className="border rounded-lg p-3 bg-green-500/10 border-green-500/30">
+  <div className="border rounded-lg p-4 bg-green-500/10 border-green-500/30">
     <div className="text-xs text-green-400">Completed</div>
     <div className="text-xl font-semibold">{selectedUser.completedCount}</div>
   </div>
 
-  <div className="border rounded-lg p-3 bg-emerald-500/10 border-emerald-500/30">
+  <div className="border rounded-lg p-4 bg-emerald-500/10 border-emerald-500/30">
     <div className="text-xs text-emerald-400">Approved</div>
     <div className="text-xl font-semibold">{selectedUser.approvedCount}</div>
   </div>
 
 </div>
+{/* SESSION HISTORY */}
+<div>
+  <div className="text-sm font-semibold mb-3">
+    Recent Sessions
+  </div>
 
+  <div className="border rounded-xl overflow-hidden">
+    <div className="max-h-[220px] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-muted">
+          <tr>
+            <th className="p-4 text-left">Login</th>
+            <th className="p-4 text-left">Logout</th>
+            <th className="p-4 text-left">Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {selectedUser.sessions?.map(session => {
+            const login = new Date(session.loginAt);
+            const logout = session.logoutAt
+              ? new Date(session.logoutAt)
+              : null;
+
+            const durationMs = logout
+              ? logout - login
+              : Date.now() - login;
+
+            const minutes = Math.floor(durationMs / 60000);
+
+            return (
+              <tr key={session._id} className="border-t">
+                <td className="p-4">
+                  {login.toLocaleString()}
+                </td>
+                <td className="p-4">
+                  {logout ? logout.toLocaleString() : "Active"}
+                </td>
+                <td className="p-4 font-medium">
+                  {minutes} min
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
         {/* FOOTER */}
         <div className="flex justify-end">
           <Button onClick={() => setProfileOpen(false)}>

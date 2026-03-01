@@ -16,10 +16,19 @@ import {
   DialogTitle,
   DialogFooter
 } from "@/components/ui/dialog";
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+/* ───────── Simple Spinner ───────── */
+function Spinner() {
+  return (
+    <div className="flex justify-center items-center py-6">
+      <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+}
 
 /* ───────── Auto Fit Bounds ───────── */
 function FitBounds({ bounds }) {
@@ -305,55 +314,62 @@ export default function ApprovalPage() {
   const [trackData, setTrackData] = useState(null);
   const [deviationData, setDeviationData] = useState(null);
 const [aiAnalysis, setAiAnalysis] = useState(null);
+const [loadingAssignments, setLoadingAssignments] = useState(false);
+const [loadingMap, setLoadingMap] = useState(false);
+const [approving, setApproving] = useState(false);
   async function loadAssignments() {
-    const res = await fetch(
-      `${API_BASE_URL}/api/assignments/approval-queue`,
-      {
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("token")
-        }
+  setLoadingAssignments(true);
+  const res = await fetch(
+    `${API_BASE_URL}/api/assignments/approval-queue`,
+    {
+      headers: {
+        Authorization: "Bearer " + localStorage.getItem("token")
       }
-    );
-    setAssignments(await res.json());
-  }
-
+    }
+  );
+  setAssignments(await res.json());
+  setLoadingAssignments(false);
+}
   async function loadMapData(id, th) {
+  setLoadingMap(true);
+
   const token = localStorage.getItem("token");
 
-  // 1️⃣ TRACK
-  const trackRes = await fetch(
-    `${API_BASE_URL}/api/assignments/${id}/track`,
-    { headers: { Authorization: "Bearer " + token } }
-  );
+  try {
+    const trackRes = await fetch(
+      `${API_BASE_URL}/api/assignments/${id}/track`,
+      { headers: { Authorization: "Bearer " + token } }
+    );
 
-  setTrackData(await trackRes.json());
+    setTrackData(await trackRes.json());
 
-  // 2️⃣ DEVIATION
-  const devRes = await fetch(
-    `${API_BASE_URL}/api/assignments/${id}/deviation-analysis?threshold=${th}`,
-    { headers: { Authorization: "Bearer " + token } }
-  );
+    const devRes = await fetch(
+      `${API_BASE_URL}/api/assignments/${id}/deviation-analysis?threshold=${th}`,
+      { headers: { Authorization: "Bearer " + token } }
+    );
 
-  if (!devRes.ok) {
-    setDeviationData(null);
-    setAiAnalysis(null);
-    return;   // 🚨 STOP HERE if deviation failed
-  }
+    if (!devRes.ok) {
+      setDeviationData(null);
+      setAiAnalysis(null);
+      return;
+    }
 
-  const devJson = await devRes.json();
-  setDeviationData(devJson);
+    const devJson = await devRes.json();
+    setDeviationData(devJson);
 
-  // 3️⃣ AI (ONLY AFTER DEVIATION SUCCESS)
-  const aiRes = await fetch(
-    `${API_BASE_URL}/api/assignments/${id}/ai-analysis?threshold=${th}`,
-    { headers: { Authorization: "Bearer " + token } }
-  );
+    const aiRes = await fetch(
+      `${API_BASE_URL}/api/assignments/${id}/ai-analysis?threshold=${th}`,
+      { headers: { Authorization: "Bearer " + token } }
+    );
 
-  if (aiRes.ok) {
-    const aiJson = await aiRes.json();
-    setAiAnalysis(aiJson.aiAnalysis);
-  } else {
-    setAiAnalysis(null);
+    if (aiRes.ok) {
+      const aiJson = await aiRes.json();
+      setAiAnalysis(aiJson.aiAnalysis);
+    } else {
+      setAiAnalysis(null);
+    }
+  } finally {
+    setLoadingMap(false);
   }
 }
 
@@ -365,6 +381,8 @@ async function approveAssignment(id, finalName) {
     alert("Final file name is required");
     return;
   }
+
+  setApproving(true);
 
   const token = localStorage.getItem("token");
 
@@ -382,6 +400,8 @@ async function approveAssignment(id, finalName) {
     }
   );
 
+  setApproving(false);
+
   const data = await res.json();
 
   if (!res.ok) {
@@ -392,25 +412,6 @@ async function approveAssignment(id, finalName) {
   setApproveDialogOpen(false);
   setSelectedAssignment(null);
   await loadAssignments();
-}
-
-  async function rejectAssignment(id) {
-  if (!window.confirm("Are you sure you want to reject this assignment?"))
-    return;
-
-  const token = localStorage.getItem("token");
-
-  await fetch(`${API_BASE_URL}/api/assignments/${id}/reject`, {
-    method: "PATCH",
-    headers: { Authorization: "Bearer " + token }
-  });
-
-  // 🔥 CLEAR STATE PROPERLY
-  setTrackData(null);
-  setDeviationData(null);
-
-  await loadAssignments();
-  setSelectedAssignment(null);
 }
 
   useEffect(() => {
@@ -449,22 +450,36 @@ async function approveAssignment(id, finalName) {
               <th>Status</th>
             </tr>
           </thead>
-          <tbody>
-            {assignments.map(a => (
-              <tr
-                key={a._id}
-                className="border-b cursor-pointer hover:bg-muted/40"
-                onClick={async () => {
-                  setSelectedAssignment(a);
-                  await loadMapData(a._id, threshold);
-                }}
-              >
-                <td>{a.surveyName}</td>
-                <td>{a.assignedTo?.username}</td>
-                <td>{a.status}</td>
-              </tr>
-            ))}
-          </tbody>
+         <tbody>
+  {loadingAssignments ? (
+    <tr>
+      <td colSpan="3">
+        <Spinner />
+      </td>
+    </tr>
+  ) : assignments.length === 0 ? (
+    <tr>
+      <td colSpan="3" className="text-center py-6 text-muted-foreground">
+        No assignments available
+      </td>
+    </tr>
+  ) : (
+    assignments.map(a => (
+      <tr
+        key={a._id}
+        className="border-b cursor-pointer hover:bg-muted/40"
+        onClick={async () => {
+          setSelectedAssignment(a);
+          await loadMapData(a._id, threshold);
+        }}
+      >
+        <td>{a.surveyName}</td>
+        <td>{a.assignedTo?.username}</td>
+        <td>{a.status}</td>
+      </tr>
+    ))
+  )}
+</tbody>
         </table>
       </div>
 
