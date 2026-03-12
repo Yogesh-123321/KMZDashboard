@@ -3,16 +3,15 @@ import {
   TileLayer,
   Polyline,
   Marker,
-  useMap
+  useMap,
+  LayersControl
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet-draw";
 import { useEffect, useMemo, useRef } from "react";
-import { createImageThumbnailIcon } from "@/utils/imageThumbnailIcon";
 import "leaflet/dist/leaflet.css";
 
-const EDITED_TRACK_COLOR =
-  import.meta.env.VITE_EDITED_TRACK_COLOR || "#f97316";
+import { MAP_CONFIG } from "@/config/mapConfig";
 
 /* ───────── Resize + Fit ───────── */
 function MapController({ bounds }) {
@@ -20,6 +19,7 @@ function MapController({ bounds }) {
 
   useEffect(() => {
     if (!bounds || bounds.length < 2) return;
+
     setTimeout(() => {
       map.invalidateSize();
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
@@ -56,7 +56,9 @@ function DrawController({ enabled, onDrawCreated }) {
         lon: p.lng,
         ele: 0
       }));
+
       onDrawCreated(coords);
+
       map.removeLayer(e.layer);
       map.removeControl(drawControl);
     });
@@ -65,26 +67,29 @@ function DrawController({ enabled, onDrawCreated }) {
       map.off(L.Draw.Event.CREATED);
       map.removeControl(drawControl);
     };
+
   }, [enabled, map, onDrawCreated]);
 
   return null;
 }
 
-/* ───────── Vertex Edit (CORRECT) ───────── */
+/* ───────── Vertex Edit ───────── */
 function EditController({ enabled, polylineRef, onEdited }) {
+
   const map = useMap();
 
   useEffect(() => {
+
     if (!enabled || !polylineRef.current) return;
 
-// 🔒 Clone polyline for editing (NEVER edit the real one)
-const editLayer = L.polyline(
-  polylineRef.current.getLatLngs(),
-  polylineRef.current.options
-);
+    const editLayer = L.polyline(
+      polylineRef.current.getLatLngs(),
+      polylineRef.current.options
+    );
 
-const featureGroup = new L.FeatureGroup([editLayer]);
-map.addLayer(editLayer);
+    const featureGroup = new L.FeatureGroup([editLayer]);
+
+    map.addLayer(editLayer);
     map.addLayer(featureGroup);
 
     const editControl = new L.Control.Draw({
@@ -98,34 +103,46 @@ map.addLayer(editLayer);
     map.addControl(editControl);
 
     map.on("draw:edited", e => {
+
       e.layers.eachLayer(layer => {
+
         const coords = layer.getLatLngs().map(p => ({
           lat: p.lat,
           lon: p.lng,
           ele: 0
         }));
+
         onEdited(coords);
+
       });
+
     });
 
-   return () => {
-  // 🔒 Force Leaflet to commit any pending edits
-  featureGroup.eachLayer(layer => {
-    if (layer.edited) {
-      const coords = layer.getLatLngs().map(p => ({
-        lat: p.lat,
-        lon: p.lng,
-        ele: 0
-      }));
-      onEdited(coords);
-    }
-  });
+    return () => {
 
-  map.off("draw:edited");
-  map.removeControl(editControl);
-map.removeLayer(editLayer);
-map.removeLayer(featureGroup);
-};
+      featureGroup.eachLayer(layer => {
+
+        if (layer.edited) {
+
+          const coords = layer.getLatLngs().map(p => ({
+            lat: p.lat,
+            lon: p.lng,
+            ele: 0
+          }));
+
+          onEdited(coords);
+
+        }
+
+      });
+
+      map.off("draw:edited");
+      map.removeControl(editControl);
+
+      map.removeLayer(editLayer);
+      map.removeLayer(featureGroup);
+
+    };
 
   }, [enabled, map, onEdited, polylineRef]);
 
@@ -141,79 +158,102 @@ export default function KmzMap({
   onFreehandDraw,
   onVertexEdit,
   onPhotoClick,
-   editingPhoto,          // ✅ ADD
-  onPhotoDrag,           // ✅ ADD
+  editingPhoto,
+  onPhotoDrag,
   onPhotoDragEnd
 }) {
 
-/* 🔗 REF TO EDITED POLYLINE */
-const editedPolylineRef = useRef(null);
-const isPhotoDraggingRef = useRef(false);
-const dragMovedRef = useRef(false);
-const suppressNextClickRef = useRef(false);
-const isDraggingRef = useRef(false);
-const suppressClickRef = useRef(false);
-const isDark =
-  document.documentElement.classList.contains("dark");
-console.log("TRACKS FROM BACKEND:", tracks);
-/* 🔵 Original tracks */
-const originalTracks = useMemo(() => {
-  return (tracks || [])
-    .map(t => {
-      let displayColor = t.color || "#3388ff";
+  const editedPolylineRef = useRef(null);
 
-      if (t.name?.toLowerCase().includes("reference")) {
-        displayColor = "#2563eb"; // Blue
+  const isDraggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
+
+  /* 🔵 Original Tracks */
+  const originalTracks = useMemo(() => {
+
+    return (tracks || [])
+      .map(t => {
+
+        let displayColor = t.color || MAP_CONFIG.TRACKS.reference;
+
+        if (t.name?.toLowerCase().includes("reference")) {
+          displayColor = MAP_CONFIG.TRACKS.reference;
+        }
+
+        if (t.name?.toLowerCase().includes("recorded")) {
+          displayColor = MAP_CONFIG.TRACKS.recorded;
+        }
+
+        return {
+          name: t.name,
+          color: displayColor,
+          width: t.width || MAP_CONFIG.TRACK_WIDTH.reference,
+          path: (t.coordinates || [])
+            .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+            .map(p => [p.lat, p.lon])
+        };
+
+      })
+      .filter(t => t.path.length > 1);
+
+  }, [tracks]);
+
+  /* Bounds */
+  const allBounds = useMemo(() => {
+
+    const b = originalTracks.flatMap(t => t.path);
+
+    editedTracks.forEach(t => {
+
+      if (Array.isArray(t.coordinates)) {
+        b.push(...t.coordinates.map(p => [p.lat, p.lon]));
       }
 
-      if (t.name?.toLowerCase().includes("recorded")) {
-        displayColor = "#dc2626"; // Red
-      }
+    });
 
-      return {
-        name: t.name,
-        color: displayColor,
-        width: t.width || 4,
-        path: (t.coordinates || [])
-          .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
-          .map(p => [p.lat, p.lon])
-      };
-    })
-    .filter(t => t.path.length > 1);
-}, [tracks]);
+    return b;
 
+  }, [originalTracks, editedTracks]);
 
-/* 🔲 Fit bounds */
-const allBounds = useMemo(() => {
-  const b = originalTracks.flatMap(t => t.path);
-
-  editedTracks.forEach(t => {
-    if (Array.isArray(t.coordinates)) {
-      b.push(...t.coordinates.map(p => [p.lat, p.lon]));
-    }
-  });
-
-  return b;
-}, [originalTracks, editedTracks]);
-const activeEditedTrack =
-  editedTracks.length > 0
-    ? editedTracks[editedTracks.length - 1]
-    : null;
+  const activeEditedTrack =
+    editedTracks.length > 0
+      ? editedTracks[editedTracks.length - 1]
+      : null;
 
   return (
+
     <div className="absolute inset-0">
+
       <MapContainer
         center={allBounds[0] || [0, 0]}
         zoom={20}
         style={{ height: "100%", width: "100%" }}
       >
-<TileLayer
-  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-  attribution="© OpenStreetMap contributors"
-  maxZoom={19}
-/>
 
+        <LayersControl position="topright">
 
+          <LayersControl.BaseLayer checked name="Satellite">
+            <TileLayer
+              attribution="Tiles © Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.BaseLayer name="Streets">
+            <TileLayer
+              attribution="© OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.Overlay checked name="Labels">
+            <TileLayer
+              attribution="Tiles © Esri"
+              url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.Overlay>
+
+        </LayersControl>
 
         <MapController bounds={allBounds} />
 
@@ -227,102 +267,136 @@ const activeEditedTrack =
           polylineRef={editedPolylineRef}
           onEdited={onVertexEdit}
         />
-      {/* 🔵 ORIGINAL TRACKS */}
-      {originalTracks.map((t, i) => (
-        <Polyline
-          key={`original-${i}`}
-          positions={t.path}
-          pathOptions={{
-            color: t.color,
-            weight: t.width
-          }} />
-      ))}
 
-      {/* 🟧 EDITED TRACKS (EDITABLE) */}
-        {/* 🟧 ALL edited tracks (visual only) */}
+        {/* Original Tracks */}
+        {originalTracks.map((t, i) => (
+
+          <Polyline
+            key={`original-${i}`}
+            positions={t.path}
+            pathOptions={{
+              color: t.color,
+              weight: t.width
+            }}
+          />
+
+        ))}
+
+        {/* Edited Tracks */}
         {editedTracks.map(t => (
+
           <Polyline
             key={t.id}
             positions={t.coordinates.map(p => [p.lat, p.lon])}
             pathOptions={{
-              color: "#f97316",
-              weight: 4,
+              color: MAP_CONFIG.TRACKS.edited,
+              weight: MAP_CONFIG.TRACK_WIDTH.edited,
               opacity: 0.8,
               dashArray: "6 4"
             }}
           />
+
         ))}
 
-        {/* 🟣 ACTIVE edited track (editable) */}
+        {/* Active Edited Track */}
         {activeEditedTrack && (
+
           <Polyline
             key={`active-${activeEditedTrack.id}`}
             ref={editedPolylineRef}
             positions={activeEditedTrack.coordinates.map(p => [p.lat, p.lon])}
             pathOptions={{
-              color: "#9333ea",
-              weight: 5
+              color: MAP_CONFIG.TRACKS.edited,
+              weight: MAP_CONFIG.TRACK_WIDTH.edited
             }}
           />
+
         )}
 
-        {/* 📍 PHOTO MARKERS */}
-{/* 📍 PHOTO MARKERS */}
-{points?.filter(p =>
-    Number.isFinite(p.lat) &&
-    Number.isFinite(p.lon)
-  )
-  .map(photo => (
+        {/* Photo / Video Markers */}
+        {points?.filter(p =>
+          Number.isFinite(p.lat) && Number.isFinite(p.lon)
+        )
+          .map(photo => (
 
-<Marker
-  position={[photo.lat, photo.lon]}
-  draggable
-  icon={createImageThumbnailIcon(photo.imageUrl)}
-  eventHandlers={{
-    dragstart: () => {
-      isDraggingRef.current = true;
-      suppressClickRef.current = true;
-    },
+            <Marker
+              key={photo._id || `${photo.lat}-${photo.lon}`}
+              position={[photo.lat, photo.lon]}
+              draggable
+              icon={L.divIcon({
+                className: "",
+                html: `
+                <div style="
+                  width:30px;
+                  height:30px;
+                  background:white;
+                  border-radius:8px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  box-shadow:0 3px 8px rgba(0,0,0,0.4);
+                  font-size:16px;
+                ">
+                  ${photo.imageUrl ? "📷" : "🎬"}
+                </div>
+                `,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+              })}
 
-    drag: (e) => {
-      const { lat, lng } = e.target.getLatLng();
+              eventHandlers={{
 
-      // ✅ live update WITHOUT touching drag flags
-      onPhotoDrag(photo, {
-        lat,
-        lon: lng
-      });
-    },
+                dragstart: () => {
+                  isDraggingRef.current = true;
+                  suppressClickRef.current = true;
+                },
 
-    dragend: (e) => {
-      const { lat, lng } = e.target.getLatLng();
+                drag: (e) => {
 
-      // ✅ final sync (safe)
-      onPhotoDrag(photo, {
-        lat,
-        lon: lng
-      });
+                  const { lat, lng } = e.target.getLatLng();
 
-      isDraggingRef.current = false;
+                  onPhotoDrag(photo, {
+                    lat,
+                    lon: lng
+                  });
 
-      // 🔑 IMPORTANT: delay clearing suppression
-      setTimeout(() => {
-        suppressClickRef.current = false;
-      }, 50);
-    },
+                },
 
-    click: () => {
-      // ❌ ignore drag-generated click
-      if (isDraggingRef.current || suppressClickRef.current) return;
+                dragend: (e) => {
 
-      // ✅ real user click
-      onPhotoClick(photo);
-    }
-  }}
-/>
+                  const { lat, lng } = e.target.getLatLng();
 
-))}
+                  onPhotoDrag(photo, {
+                    lat,
+                    lon: lng
+                  });
+
+                  isDraggingRef.current = false;
+
+                  setTimeout(() => {
+                    suppressClickRef.current = false;
+                  }, 50);
+
+                },
+
+                click: () => {
+
+                  if (isDraggingRef.current || suppressClickRef.current) return;
+
+                  onPhotoClick(photo);
+
+                }
+
+              }}
+
+            />
+
+          ))}
+
       </MapContainer>
+
     </div>
+
   );
+
 }

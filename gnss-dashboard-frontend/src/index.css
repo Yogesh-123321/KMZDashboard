@@ -176,7 +176,13 @@ html {
   background-color: red;
   box-shadow: 0 0 8px red;
 }
-
+.live-dot.break {
+  width: 14px;
+  height: 14px;
+  background: orange;
+  border-radius: 50%;
+  border: 2px solid white;
+}
 /* ───────── Blinking Animation (Deviation Warning) ───────── */
 
 @keyframes blinkWarning {
@@ -203,4 +209,10 @@ html {
   border-top: 4px solid white;
   border-radius: 50%;
   animation: spinSmooth 1s linear infinite;
+}
+.leaflet-control-measure {
+  z-index: 1000 !important;
+}
+.leaflet-control-container {
+  z-index: 1000 !important;
 }

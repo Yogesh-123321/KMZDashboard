@@ -4,7 +4,7 @@ const KmzParsed = require("../models/KmzParsed");
 const { downloadFile } = require("./drive.download");
 const { extractKmlFromKmz } = require("../utils/kmz.extract");
 const { parseKml } = require("../parsers/kml.parser");
-
+const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
 async function parseAndStoreKmz(fileId, fileName) {
   const kmzId = fileId;
 
@@ -16,7 +16,7 @@ async function parseAndStoreKmz(fileId, fileName) {
   // ─── Download KMZ ─────────────────────────────
   await downloadFile(fileId, kmzPath);
 
-  // ─── Extract KML + images ─────────────────────
+  // ─── Extract KML + media ──────────────────────
   const kmlPath = extractKmlFromKmz(kmzPath, kmzId);
 
   // ─── Parse KML ────────────────────────────────
@@ -37,22 +37,53 @@ async function parseAndStoreKmz(fileId, fileName) {
       .sort();
   }
 
-  // 🔍 DEBUG (IMPORTANT — do NOT remove yet)
-  console.log("KMZ IMAGE DIR:", imageDir);
-  console.log("EXTRACTED IMAGE FILES:", imageFiles);
-
-  // ─── Attach images ONLY to photo placemarks ────
-  const photoPoints = parsed.points.filter(
-    p => p.name && p.name.startsWith("Photo @")
+  // ─── Locate extracted videos ──────────────────
+  const videoDir = path.join(
+    __dirname,
+    "../../public/kmz-videos",
+    kmzId
   );
 
-  photoPoints.forEach((p, index) => {
-    if (imageFiles[index]) {
-      p.imageFile = imageFiles[index];
-    }
-  });
+  let videoFiles = [];
+  if (fs.existsSync(videoDir)) {
+    videoFiles = fs
+      .readdirSync(videoDir)
+      .filter(f => /\.(mp4|mov|webm)$/i.test(f))
+      .sort();
+  }
 
-  // ─── Save to MongoDB ───────────────────────────
+  // 🔍 DEBUG
+  console.log("KMZ IMAGE DIR:", imageDir);
+  console.log("IMAGE FILES:", imageFiles);
+
+  console.log("KMZ VIDEO DIR:", videoDir);
+  console.log("VIDEO FILES:", videoFiles);
+
+// ─── Attach images to photo placemarks ────────
+const photoPoints = parsed.points.filter(
+  p => p.name && p.name.startsWith("Photo @")
+);
+
+photoPoints.forEach((p, index) => {
+  if (imageFiles[index]) {
+    p.imageFile = imageFiles[index];
+    p.imageUrl = `${BASE_URL}/kmz-images/${kmzId}/${imageFiles[index]}`;
+  }
+});
+
+// ─── Attach videos to video placemarks ────────
+const videoPoints = parsed.points.filter(
+  p => p.name && p.name.startsWith("Video @")
+);
+
+videoPoints.forEach((p, index) => {
+  if (videoFiles[index]) {
+    p.videoFile = videoFiles[index];
+    p.videoUrl = `${BASE_URL}/kmz-videos/${kmzId}/${videoFiles[index]}`;
+  }
+});
+
+  // ─── Save to MongoDB ──────────────────────────
   const record = await KmzParsed.findOneAndUpdate(
     { driveFileId: fileId },
     {

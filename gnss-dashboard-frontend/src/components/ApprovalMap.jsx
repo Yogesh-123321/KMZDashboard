@@ -9,6 +9,8 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet-measure/dist/leaflet-measure.css";
+import "leaflet-measure/dist/leaflet-measure.js";
 
 /* ───────── FIX MAP SIZE (MODAL SAFE) ───────── */
 function FixMapSize() {
@@ -18,6 +20,7 @@ function FixMapSize() {
     const timeout = setTimeout(() => {
       map.invalidateSize();
     }, 300);
+
     return () => clearTimeout(timeout);
   }, [map]);
 
@@ -40,6 +43,27 @@ function FitBounds({ bounds }) {
   return null;
 }
 
+/* ───────── MEASURE TOOL ───────── */
+function MeasureControl() {
+  const map = useMap();
+
+  useEffect(() => {
+    const measureControl = new L.Control.Measure({
+      position: "topright",
+      primaryLengthUnit: "meters",
+      secondaryLengthUnit: "kilometers",
+      activeColor: "#2563eb",
+      completedColor: "#16a34a"
+    });
+
+    map.addControl(measureControl);
+
+    return () => map.removeControl(measureControl);
+  }, [map]);
+
+  return null;
+}
+
 /* ───────── MAIN APPROVAL MAP ───────── */
 export default function ApprovalMap({
   trackData,
@@ -49,27 +73,34 @@ export default function ApprovalMap({
 
   const [selectedDeviation, setSelectedDeviation] = useState(null);
 
-  /* Safe coordinate normalization */
+  const [measureRef, setMeasureRef] = useState(null);
+  const [measureRec, setMeasureRec] = useState(null);
+  const [measureDistance, setMeasureDistance] = useState(null);
+
+  /* Normalize coordinates */
   const normalize = (p) => {
     const lat = Number(p?.lat);
     const lon = Number(p?.lon);
+
     if (isNaN(lat) || isNaN(lon)) return null;
+
     return [lat, lon];
   };
 
-  /* Build bounds from all data */
+  /* Collect bounds */
   const bounds = useMemo(() => {
+
     const all = [];
 
     trackData?.referenceTrack?.forEach(segment => {
-      segment.forEach(p => {
+      segment?.forEach(p => {
         const coord = normalize(p);
         if (coord) all.push(coord);
       });
     });
 
     trackData?.recordedTrack?.forEach(segment => {
-      segment.forEach(p => {
+      segment?.forEach(p => {
         const coord = normalize(p);
         if (coord) all.push(coord);
       });
@@ -86,6 +117,7 @@ export default function ApprovalMap({
     });
 
     return all;
+
   }, [trackData, deviationPoints, photos]);
 
   const fallbackCenter = [28.6139, 77.2090];
@@ -95,9 +127,11 @@ export default function ApprovalMap({
       center={bounds.length ? bounds[0] : fallbackCenter}
       zoom={18}
       style={{ height: "100%", width: "100%" }}
-      scrollWheelZoom={true}
+      scrollWheelZoom
     >
+
       <FixMapSize />
+      <MeasureControl />
 
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -111,10 +145,18 @@ export default function ApprovalMap({
       {trackData?.referenceTrack?.map((track, index) => (
         <Polyline
           key={`ref-${index}`}
-          positions={track.map(p => normalize(p)).filter(Boolean)}
+          positions={track?.map(p => normalize(p)).filter(Boolean)}
           pathOptions={{
             color: "#2563eb",
-            weight: 5
+            weight: 8
+          }}
+          interactive
+          eventHandlers={{
+            click: (e) => {
+              setMeasureRef(e.latlng);
+              setMeasureRec(null);
+              setMeasureDistance(null);
+            }
           }}
         />
       ))}
@@ -123,16 +165,63 @@ export default function ApprovalMap({
       {trackData?.recordedTrack?.map((track, index) => (
         <Polyline
           key={`rec-${index}`}
-          positions={track.map(p => normalize(p)).filter(Boolean)}
+          positions={track?.map(p => normalize(p)).filter(Boolean)}
           pathOptions={{
             color: "#dc2626",
-            weight: 6
+            weight: 8
+          }}
+          interactive
+          eventHandlers={{
+            click: (e) => {
+
+              if (!measureRef) {
+                alert("Click reference track first");
+                return;
+              }
+
+              const rec = e.latlng;
+              const dist = L.latLng(measureRef).distanceTo(rec);
+
+              setMeasureRec(rec);
+              setMeasureDistance(dist);
+            }
           }}
         />
       ))}
 
-      {/* 🟡 Clickable Deviation Points */}
+      {/* Measurement Line */}
+      {measureRef && measureRec && (
+        <Polyline
+          positions={[
+            [measureRef.lat, measureRef.lng],
+            [measureRec.lat, measureRec.lng]
+          ]}
+          pathOptions={{
+            color: "green",
+            dashArray: "6,6",
+            weight: 3
+          }}
+        />
+      )}
+
+      {/* Measurement markers */}
+      {measureRef && (
+        <Marker position={[measureRef.lat, measureRef.lng]}>
+          <Popup>Reference Point</Popup>
+        </Marker>
+      )}
+
+      {measureRec && (
+        <Marker position={[measureRec.lat, measureRec.lng]}>
+          <Popup>
+            Distance: {measureDistance?.toFixed(2)} m
+          </Popup>
+        </Marker>
+      )}
+
+      {/* 🟡 Deviation Points */}
       {deviationPoints.map((p, i) => {
+
         const coord = normalize(p);
         if (!coord) return null;
 
@@ -152,7 +241,6 @@ export default function ApprovalMap({
                   background:#facc15;
                   border:2px solid black;
                   border-radius:50%;
-                  cursor:pointer;
                 "></div>
               `
             })}
@@ -180,12 +268,12 @@ export default function ApprovalMap({
               }}
             />
 
-            {/* Projected reference point */}
             <Marker
               position={[
                 selectedDeviation.projectedLat,
                 selectedDeviation.projectedLon
               ]}
+              zIndexOffset={1000}
               icon={L.divIcon({
                 className: "",
                 html: `
@@ -200,52 +288,87 @@ export default function ApprovalMap({
               })}
             >
               <Popup>
-                <div>
-                  <strong>Deviation:</strong><br/>
-                  {selectedDeviation.deviation.toFixed(2)} meters
-                </div>
+                <strong>Deviation:</strong><br/>
+                {selectedDeviation.deviation.toFixed(2)} meters
               </Popup>
             </Marker>
           </>
         )}
 
-      {/* 📷 Photo Markers */}
+      {/* 📷 MEDIA MARKERS */}
       {photos.map((photo, i) => {
+
         const coord = normalize(photo);
         if (!coord) return null;
 
         return (
-          <Marker key={`photo-${i}`} position={coord}>
+          <Marker
+            key={`photo-${photo._id || i}`}
+            position={coord}
+            icon={L.divIcon({
+              className: "",
+              html: photo.imageUrl ? "📷" : "📍",
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
+            })}
+          >
             <Popup>
-              <div style={{ width: 300 }}>
-                <img
-                  src={`${import.meta.env.VITE_API_BASE_URL}${photo.imageUrl}`}
-                  alt="Survey"
-                  style={{
-                    width: "100%",
-                    borderRadius: 8,
-                    marginBottom: 8
-                  }}
-                />
 
-                <div style={{ fontSize: 12, marginBottom: 6 }}>
-                  {new Date(photo.timestamp).toLocaleString()}
-                </div>
+              <div style={{ width: 300 }}>
+
+  {photo.imageUrl ? (
+  <img
+    src={photo.imageUrl}
+    alt="Survey"
+    style={{
+      width: "100%",
+      borderRadius: 8,
+      marginBottom: 8
+    }}
+  />
+) : photo.videoUrl ? (
+  <video
+    key={photo.videoUrl}
+    controls
+    playsInline
+    preload="metadata"
+    style={{
+      width: "100%",
+      borderRadius: 8,
+      marginBottom: 8
+    }}
+  >
+    <source src={photo.videoUrl} type="video/mp4" />
+  </video>
+) : (
+  <div style={{ fontSize: 12 }}>No media</div>
+)}
 
                 {photo.description && (
-                  <div style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#333"
-                  }}>
-                    {photo.description}
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      marginBottom: 4
+                    }}
+                  >
+                    {photo.description.replace("Description:", "").trim()}
                   </div>
                 )}
+
+                {photo.timestamp && (
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    {new Date(Number(photo.timestamp)).toLocaleString()}
+                  </div>
+                )}
+
               </div>
+
             </Popup>
           </Marker>
         );
       })}
+
     </MapContainer>
   );
 }

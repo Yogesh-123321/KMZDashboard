@@ -30,10 +30,15 @@ await UserSession.create({
   loginAt: new Date()
 });
 
-// Mark active
+// Mark active and update last active timestamp
 await AuthUser.updateOne(
   { _id: user._id },
-  { $set: { isActive: true } }
+  {
+    $set: {
+      isActive: true,
+      lastLocationAt: new Date()
+    }
+  }
 );
 
     const token = jwt.sign(
@@ -108,6 +113,44 @@ router.patch("/location", verifyToken, async (req, res) => {
 
   } catch (err) {
     console.error("LOCATION UPDATE ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post("/break", verifyToken, async (req, res) => {
+  try {
+
+    const { onBreak } = req.body;
+
+    if (onBreak) {
+
+      await AuthUser.updateOne(
+        { _id: req.user.id },
+        {
+          $set: {
+            isOnBreak: true,
+            breakStartTime: new Date()
+          }
+        }
+      );
+
+    } else {
+
+      await AuthUser.updateOne(
+        { _id: req.user.id },
+        {
+          $set: {
+            isOnBreak: false,
+            breakStartTime: null
+          }
+        }
+      );
+
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("BREAK ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });

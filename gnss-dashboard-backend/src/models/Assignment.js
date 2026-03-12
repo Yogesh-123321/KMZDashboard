@@ -53,8 +53,9 @@ const AssignmentSchema = new mongoose.Schema(
     lat: Number,
     lon: Number,
     imageUrl: String,
+    videoUrl: String,
     timestamp: Number,
-    description: String   // 🔥 NEW
+    description: String
   }
 ],
 

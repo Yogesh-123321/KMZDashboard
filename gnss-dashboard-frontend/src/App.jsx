@@ -13,7 +13,7 @@ import UploadKmz from "./pages/UploadKmz";
 import ManageSurveyors from "./pages/ManageSurveyors";
 import FieldSurveyStatus from "./pages/FieldSurveyStatus";
 import ApprovalPage from "./pages/ApprovalPage";
-
+import { Toaster } from "sonner";
 function App() {
   const [loggedIn, setLoggedIn] = useState(
     !!localStorage.getItem("token")
@@ -251,6 +251,13 @@ function App() {
 
   return (
     <BrowserRouter>
+    <Toaster
+      position="top-right"
+      richColors
+      expand
+      closeButton
+    />
+
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<AboutUs />} />

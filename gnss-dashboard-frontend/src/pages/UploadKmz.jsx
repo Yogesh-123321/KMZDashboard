@@ -64,7 +64,30 @@ export default function UploadKmz() {
   setHistoryLogs(logs);
   setHistoryOpen(true);
 }
+function getLogStyle(action) {
+  switch (action) {
+    case "KMZ_UPLOADED":
+      return "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700";
 
+    case "KMZ_PARSED":
+      return "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700";
+
+    case "TRACK_EDITED":
+      return "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700";
+
+    case "PHOTO_MOVED":
+      return "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700";
+
+    case "KMZ_SAVED_COPY":
+      return "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700";
+
+    case "KMZ_DELETED":
+      return "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700";
+
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600";
+  }
+}
   return (
     <div className="h-full flex flex-col gap-4">
 
@@ -122,7 +145,7 @@ export default function UploadKmz() {
               {historyLogs.map(log => (
                 <div
                   key={log._id}
-                  className="border rounded p-2 text-sm"
+className={`border rounded p-2 text-sm ${getLogStyle(log.action)}`}
                 >
                   <div className="font-medium">{log.action}</div>
                   <div className="text-xs text-muted-foreground">

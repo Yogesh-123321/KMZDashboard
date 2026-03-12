@@ -49,13 +49,35 @@ router.put(
   verifyToken,
   requirePermission("MANAGE_USERS"),
   async (req, res) => {
-    const updated = await AuthUser.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    try {
 
-    res.json(updated);
+      const { username, role, password } = req.body;
+
+      const update = {
+        username,
+        role
+      };
+
+      // If password is provided → hash it
+      if (password) {
+        const hash = await bcrypt.hash(password, 10);
+
+        update.passwordHash = hash;
+        update.passwordPlain = password; // keep if you want to display it
+      }
+
+      const updated = await AuthUser.findByIdAndUpdate(
+        req.params.id,
+        update,
+        { new: true }
+      );
+
+      res.json(updated);
+
+    } catch (err) {
+      console.error("USER UPDATE ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );
 

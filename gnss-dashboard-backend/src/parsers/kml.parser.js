@@ -154,25 +154,51 @@ function parseKml(kmlPath) {
     }
 
     /* ───── PHOTO POINTS ───── */
-    if (pm.Point?.coordinates) {
-      const [lon, lat, ele] = pm.Point.coordinates
-        .trim()
-        .split(",")
-        .map(Number);
+    /* ───── MEDIA POINTS ───── */
+if (pm.Point?.coordinates) {
+  const [lon, lat, ele] = pm.Point.coordinates
+    .trim()
+    .split(",")
+    .map(Number);
 
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        points.push({
-          name: pm.name || "Point",
-          lat,
-          lon,
-          ele: ele ?? 0,
-          imageFile:
-            pm.name && pm.name.startsWith("Photo @")
-              ? `${pm.name.replace("Photo @", "").trim()}.jpg`
-              : null
-        });
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+
+    let imageUrl = null;
+    let videoUrl = null;
+    let description = "";
+
+    if (pm.description) {
+
+      const desc = pm.description;
+
+      const imgMatch = desc.match(/<img[^>]+src="([^"]+)"/i);
+      if (imgMatch) {
+        imageUrl = imgMatch[1];
+      }
+
+      const vidMatch = desc.match(/<source[^>]+src="([^"]+)"/i);
+      if (vidMatch) {
+        videoUrl = vidMatch[1];
+      }
+
+      const textMatch = desc.match(/Description:\s*(.*)/i);
+      if (textMatch) {
+        description = textMatch[1];
       }
     }
+
+    points.push({
+      name: pm.name || "Point",
+      lat,
+      lon,
+      ele: ele ?? 0,
+      imageUrl,
+      videoUrl,
+      description,
+      type: videoUrl ? "video" : "image"
+    });
+  }
+}
   }
 
   console.log("PARSED TRACK COUNT:", tracks.length);

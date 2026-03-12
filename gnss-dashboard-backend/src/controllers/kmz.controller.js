@@ -151,17 +151,27 @@ async function saveEditedKmzCopy(req, res) {
     const zip = new AdmZip();
     zip.addFile("doc.kml", Buffer.from(kml, "utf-8"));
 
-    const imageDir = path.join(
-      __dirname,
-      "../../public/kmz-images",
-      fileId
-    );
+    function addMediaFromDir(dirPath) {
+  if (!fs.existsSync(dirPath)) return;
 
-    if (fs.existsSync(imageDir)) {
-      fs.readdirSync(imageDir).forEach(img => {
-        zip.addLocalFile(path.join(imageDir, img), "", img);
-      });
+  fs.readdirSync(dirPath).forEach(file => {
+    const fullPath = path.join(dirPath, file);
+
+    if (fs.statSync(fullPath).isFile()) {
+      zip.addLocalFile(fullPath, "", file);
     }
+  });
+}
+
+/* images */
+addMediaFromDir(
+  path.join(__dirname, "../../public/kmz-images", fileId)
+);
+
+/* videos */
+addMediaFromDir(
+  path.join(__dirname, "../../public/kmz-videos", fileId)
+);
 
     zip.writeZip(editedKmzPath);
 

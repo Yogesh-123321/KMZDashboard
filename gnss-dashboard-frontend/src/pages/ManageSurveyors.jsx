@@ -32,6 +32,57 @@ export default function ManageSurveyors() {
   /* NEW STATE */
   const [selectedUser, setSelectedUser] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+const [sortBy, setSortBy] = useState("alphabetical");
+const totalUsers = users.length;
+const activeUsers = users.filter(u => u.isActive).length;
+
+const [search, setSearch] = useState("");
+
+const filteredUsers = users.filter(user =>
+  user.username.toLowerCase().includes(search.toLowerCase())
+);
+
+const sortedUsers = [...filteredUsers].sort((a, b) => {
+
+  /* ACTIVE FIRST SORT */
+
+  if (sortBy === "active") {
+
+    if (a.isActive !== b.isActive) {
+      return b.isActive - a.isActive;   // active users first
+    }
+
+    return a.username.localeCompare(b.username); // alphabetical inside groups
+  }
+
+  /* NEWEST FIRST */
+
+  if (sortBy === "newest") {
+
+    const dateDiff =
+      new Date(b.createdAt) - new Date(a.createdAt);
+
+    if (dateDiff !== 0) return dateDiff;
+
+    return a.username.localeCompare(b.username);
+  }
+
+  /* OLDEST FIRST */
+
+  if (sortBy === "oldest") {
+
+    const dateDiff =
+      new Date(a.createdAt) - new Date(b.createdAt);
+
+    if (dateDiff !== 0) return dateDiff;
+
+    return a.username.localeCompare(b.username);
+  }
+
+  /* DEFAULT: ALPHABETICAL */
+
+  return a.username.localeCompare(b.username);
+});
 
   const [form, setForm] = useState({
     username: "",
@@ -60,8 +111,32 @@ export default function ManageSurveyors() {
 
   /* ---------------- CREATE ---------------- */
 
+const usernameExists = users.some(
+  u => u.username.toLowerCase() === form.username.toLowerCase()
+);
+
+function generateSuggestions(username) {
+
+  const base = username.toLowerCase();
+
+  return [
+    `${base}1`,
+    `${base}123`,
+    `${base}_${Math.floor(Math.random()*100)}`,
+    `${base}${new Date().getFullYear()}`,
+    `${base}.${Math.floor(Math.random()*1000)}`
+  ];
+}
+
+
   async function createUser() {
-    if (!form.username || !form.password) return;
+
+if (!form.username || !form.password) return;
+
+if (usernameExists) {
+  alert("Username already exists. Please choose another.");
+  return;
+}
 
     await fetch(`${API_BASE_URL}/api/admin/users/create`, {
       method: "POST",
@@ -95,9 +170,10 @@ export default function ManageSurveyors() {
       method: "PUT",
       headers: authHeader,
       body: JSON.stringify({
-        username: user.username,
-        role: user.role
-      })
+  username: user.username,
+  role: user.role,
+  password: user.newPassword || undefined
+})
     });
 
     setEditingId(null);
@@ -124,165 +200,290 @@ async function openProfile(user) {
 
   /* ---------------- UI ---------------- */
 
-  return (
-    <div className="h-full flex flex-col p-6 space-y-6 overflow-hidden">
-      <div className="text-xl font-semibold">Manage Surveyors</div>
+return (
+  <div className="h-full flex flex-col p-6 space-y-6">
 
-      {/* ADD USER */}
-      <div className="flex gap-3">
-        <Input
-          placeholder="Username"
-          value={form.username}
-          onChange={e => setForm({ ...form, username: e.target.value })}
-        />
+    <div className="flex items-center justify-between">
 
-        <Input
-          type="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={e => setForm({ ...form, password: e.target.value })}
-        />
-
-        <select
-          className="border rounded px-2"
-          value={form.role}
-          onChange={e => setForm({ ...form, role: e.target.value })}
-        >
-          {ROLES.map(r => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-
-        <Button onClick={createUser}>Add User</Button>
+      <div className="text-xl font-semibold">
+        Manage Surveyors
       </div>
 
+     
+<div className="flex items-center gap-3 text-sm">
+
+  <Input
+    placeholder="Search user..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="w-[180px]"
+  />
+
+  <div className="px-3 py-1 rounded-lg border bg-muted">
+    Total: <span className="font-semibold">{totalUsers}</span>
+  </div>
+
+  <div className="px-3 py-1 rounded-lg border bg-green-500/10 border-green-500/30">
+    Active: <span className="font-semibold text-green-500">{activeUsers}</span>
+  </div>
+
+  <select
+    className="border rounded-lg px-3 py-1 bg-background text-sm"
+    value={sortBy}
+    onChange={(e) => setSortBy(e.target.value)}
+  >
+    <option value="alphabetical">A → Z</option>
+    <option value="active">Active First</option>
+    <option value="newest">Newest First</option>
+    <option value="oldest">Oldest First</option>
+  </select>
+
+</div>
+
+
+
+    </div>
+
+      {/* ADD USER */}
+      
+{/* ADD USER */}
+<div className="border rounded-xl p-5 bg-card shadow-sm space-y-3">
+
+  <div className="text-sm font-semibold text-muted-foreground">
+    Create New Surveyor
+  </div>
+
+  <div className="flex gap-3">
+
+    {/* USERNAME INPUT + SUGGESTIONS */}
+    <div className="flex flex-col gap-1">
+
+      <Input
+        placeholder="Username"
+        value={form.username}
+        onChange={e => setForm({ ...form, username: e.target.value })}
+      />
+
+      {usernameExists && form.username && (
+        <div className="text-xs text-red-500">
+          Username already exists
+        </div>
+      )}
+
+      {usernameExists && form.username && (
+        <div className="flex gap-2 overflow-x-auto pt-1">
+
+          {generateSuggestions(form.username).map(name => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setForm({ ...form, username: name })}
+              className="px-3 py-1 text-xs rounded-full border bg-muted hover:bg-primary/10 hover:border-primary transition"
+            >
+              {name}
+            </button>
+          ))}
+
+        </div>
+      )}
+
+    </div>
+
+    <Input
+      type="password"
+      placeholder="Password"
+      value={form.password}
+      onChange={e => setForm({ ...form, password: e.target.value })}
+    />
+
+    <select
+      className="border rounded px-2"
+      value={form.role}
+      onChange={e => setForm({ ...form, role: e.target.value })}
+    >
+      {ROLES.map(r => (
+        <option key={r}>{r}</option>
+      ))}
+    </select>
+
+    <Button onClick={createUser}>
+      Add User
+    </Button>
+
+  </div>
+
+</div>
+
       {/* USERS TABLE */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Username</TableHead>
-            <TableHead>Password</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead className="w-40">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
+      {/* USERS GRID */}
+<div className="flex-1 overflow-y-auto pr-2">
+   <div className="grid grid-cols-4 gap-4">
+  {sortedUsers.map(user => {
 
-        <TableBody>
-          {users.map(user => {
-            const isEditing = editingId === user._id;
+    const isEditing = editingId === user._id;
 
-            return (
-              <TableRow
-                key={user._id}
-                className="cursor-pointer odd:bg-muted even:bg-card hover:bg-muted/60 transition"
-                onClick={() => openProfile(user)}
+    return (
+    
+      <div
+        key={user._id}
+        onClick={() => {
+          if (editingId !== user._id) openProfile(user);
+        }}
+        className={`relative border-2 rounded-xl p-4 shadow-md transition-all duration-200 space-y-3 bg-card cursor-pointer
+  ${user.isActive
+            ? "border-green-500 shadow-green-500/20 shadow-lg ring-1 ring-green-500/40"
+            : "border-border/70 hover:border-primary/40 hover:shadow-xl"
+          }`}
+      >
+
+        {/* USERNAME */}
+        <div className="space-y-2 text-center">
+
+  {isEditing ? (
+    <>
+      <Input
+        value={user.username}
+        onClick={(e)=>e.stopPropagation()}
+        onChange={e =>
+          setUsers(prev =>
+            prev.map(u =>
+              u._id === user._id
+                ? { ...u, username: e.target.value }
+                : u
+            )
+          )
+        }
+      />
+
+      <Input
+        type="password"
+        placeholder="New Password"
+        onClick={(e)=>e.stopPropagation()}
+        onChange={e =>
+          setUsers(prev =>
+            prev.map(u =>
+              u._id === user._id
+                ? { ...u, newPassword: e.target.value }
+                : u
+            )
+          )
+        }
+      />
+    </>
+  ) : (
+   
+              <div className="flex items-center justify-center gap-2 font-semibold text-sm">
+
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${user.isActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                    }`}
+                />
+
+                {user.username}
+
+              </div>
+
+  )}
+
+</div>
+{/* PASSWORD */}
+<div
+  className="flex items-center justify-center gap-2 text-xs"
+  onClick={(e) => e.stopPropagation()}
+>
+
+  {showPassword[user._id]
+    ? user.passwordPlain || "••••••••"
+    : "••••••••"}
+
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      setShowPassword(prev => ({
+        ...prev,
+        [user._id]: !prev[user._id]
+      }));
+    }}
+  >
+    {showPassword[user._id] ? (
+      <Eye size={14} />
+    ) : (
+      <Eye size={14} />
+    )}
+  </button>
+
+</div>
+        {/* ROLE */}
+        <div className="text-xs text-muted-foreground text-center">
+          {isEditing ? (
+            <select
+              className="border rounded px-2 py-1 w-full"
+              value={user.role}
+              onChange={e =>
+                setUsers(prev =>
+                  prev.map(u =>
+                    u._id === user._id
+                      ? { ...u, role: e.target.value }
+                      : u
+                  )
+                )
+              }
+            >
+              {ROLES.map(r => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          ) : (
+            user.role
+          )}
+        </div>
+
+        {/* ACTIONS */}
+        <div className="flex justify-center gap-2">
+
+          {isEditing ? (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!confirm("Save changes to this user?")) return;
+                saveEdit(user);
+              }}
+            >
+              Save
+            </Button>
+          ) : (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!confirm("Edit this user?")) return;
+                  startEdit(user);
+                }}
               >
+                Edit
+              </Button>
+          )}
 
-                {/* USERNAME */}
-                <TableCell>
-                  {isEditing ? (
-                    <Input
-                      value={user.username}
-                      onChange={e =>
-                        setUsers(prev =>
-                          prev.map(u =>
-                            u._id === user._id
-                              ? { ...u, username: e.target.value }
-                              : u
-                          )
-                        )
-                      }
-                    />
-                  ) : (
-                    user.username
-                  )}
-                </TableCell>
+          <Button
+            size="sm"
+            className="bg-red-400 hover:bg-red-500 text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!confirm("Delete this user permanently?")) return;
+              deleteUser(user._id);
+            }}
+          >
+            Delete
+          </Button>
 
-                {/* PASSWORD */}
-                <TableCell className="flex items-center gap-2">
-                  {showPassword[user._id]
-                    ? user.passwordPlain || "••••••••"
-                    : "••••••••"}
+        </div>
 
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      setShowPassword(prev => ({
-                        ...prev,
-                        [user._id]: !prev[user._id]
-                      }));
-                    }}
-                  >
-                    {showPassword[user._id] ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )}
-                  </button>
-                </TableCell>
-
-                {/* ROLE */}
-                <TableCell>
-                  {isEditing ? (
-                    <select
-                      className="border rounded px-2 py-1"
-                      value={user.role}
-                      onChange={e =>
-                        setUsers(prev =>
-                          prev.map(u =>
-                            u._id === user._id
-                              ? { ...u, role: e.target.value }
-                              : u
-                          )
-                        )
-                      }
-                    >
-                      {ROLES.map(r => (
-                        <option key={r}>{r}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    user.role
-                  )}
-                </TableCell>
-
-                {/* ACTIONS */}
-                <TableCell className="flex gap-2">
-                  {isEditing ? (
-                    <Button
-                      onClick={e => {
-                        e.stopPropagation();
-                        saveEdit(user);
-                      }}
-                    >
-                      Save
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={e => {
-                        e.stopPropagation();
-                        startEdit(user);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="destructive"
-                    onClick={e => {
-                      e.stopPropagation();
-                      deleteUser(user._id);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      </div>
+    );
+  })}
+  </div>
+</div>
 
       {/* PROFILE MODAL */}
      {profileOpen && selectedUser && (

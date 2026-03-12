@@ -66,16 +66,24 @@ exports.getUserProfile = async (req, res) => {
 
     /* ---------- RESPONSE ---------- */
 
-    res.json({
-      ...user.toObject(),
-      assignedCount,
-      pendingCount,
-      inProgressCount,
-      completedCount,
-      approvedCount,
-      todayWorkMinutes,
-      sessions
-    });
+    let breakDurationMinutes = 0;
+
+if (user.isOnBreak && user.breakStartTime) {
+  breakDurationMinutes =
+    Math.floor((Date.now() - user.breakStartTime) / 60000);
+}
+
+res.json({
+  ...user.toObject(),
+  breakDurationMinutes,
+  assignedCount,
+  pendingCount,
+  inProgressCount,
+  completedCount,
+  approvedCount,
+  todayWorkMinutes,
+  sessions
+});
 
   } catch (err) {
     console.error("PROFILE ERROR:", err);

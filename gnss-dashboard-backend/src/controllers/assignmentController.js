@@ -148,71 +148,95 @@ exports.submitKmz = async (req, res) => {
         }
       }
 
-      /* PHOTOS */
-      if (pm.Point && pm.description) {
+      /* MEDIA POINTS (PHOTO / VIDEO) */
+if (pm.Point && pm.description) {
 
-        const coordText =
-          pm.Point[0].coordinates[0];
+  const coordText = pm.Point[0].coordinates[0];
+  const [lon, lat] = coordText.split(",");
 
-        const [lon, lat] =
-          coordText.split(",");
+let descriptionRaw = pm.description[0] || "";
 
-        const descriptionRaw =
-          pm.description[0];
+/* Decode escaped HTML from xml2js */
+descriptionRaw = descriptionRaw
+  .replace(/&lt;/g, "<")
+  .replace(/&gt;/g, ">")
+  .replace(/&quot;/g, '"');
+  let imageUrl = null;
+  let videoUrl = null;
 
-        /* Extract image filename */
-        const match =
-          descriptionRaw.match(/images\/([^"]+)/);
+  /* ───────── IMAGE DETECTION ───────── */
+  const imgMatch = descriptionRaw.match(/images\/([^"]+)/);
 
-        let imageUrl = null;
-        let imageFile = null;
+  if (imgMatch) {
 
-        if (match) {
+    const imageFile = imgMatch[1];
 
-          imageFile = match[1];
+    const sourceImagePath =
+      path.join(extractPath, "images", imageFile);
 
-          const sourceImagePath =
-            path.join(extractPath, "images", imageFile);
+    const targetImagePath =
+      path.join(publicDir, imageFile);
 
-          const targetImagePath =
-            path.join(publicDir, imageFile);
+    if (fs.existsSync(sourceImagePath)) {
 
-          if (fs.existsSync(sourceImagePath)) {
+      fs.copyFileSync(sourceImagePath, targetImagePath);
 
-            fs.copyFileSync(
-              sourceImagePath,
-              targetImagePath
-            );
-
-            imageUrl =
-              `${BASE_URL}/submitted-kmz/${assignment._id}/${imageFile}`;
-          }
-        }
-
-        /* Extract clean description text */
-
-let cleanDescription = "";
-
-if (descriptionRaw) {
-
-  // Remove image tag
-  cleanDescription = descriptionRaw
-    .replace(/<img[^>]*>/, "")
-    .replace(/<br\/?>/g, "")
-    .replace(/<[^>]+>/g, "")  // remove any other HTML tags
-    .trim();
-}
-
-photos.push({
-  lat: parseFloat(lat),
-  lon: parseFloat(lon),
-  imageUrl,
-  timestamp: Date.now(),
-  description: cleanDescription
-});
-      }
+      imageUrl =
+        `${BASE_URL}/submitted-kmz/${assignment._id}/${imageFile}`;
     }
+  }
 
+  /* ───────── VIDEO DETECTION ───────── */
+const vidMatch = descriptionRaw.match(/videos\/([^\s"]+\.mp4)/i);
+  if (vidMatch) {
+
+    const videoFile = vidMatch[1];
+
+    const sourceVideoPath =
+      path.join(extractPath, "videos", videoFile);
+
+    const targetVideoDir =
+      path.join(publicDir, "videos");
+
+    fs.mkdirSync(targetVideoDir, { recursive: true });
+
+    const targetVideoPath =
+      path.join(targetVideoDir, videoFile);
+
+    if (fs.existsSync(sourceVideoPath)) {
+
+      fs.copyFileSync(sourceVideoPath, targetVideoPath);
+
+      videoUrl =
+        `${BASE_URL}/submitted-kmz/${assignment._id}/videos/${videoFile}`;
+    }
+  }
+
+  /* ───────── CLEAN DESCRIPTION ───────── */
+
+  let cleanDescription = "";
+
+  if (descriptionRaw) {
+
+    cleanDescription = descriptionRaw
+      .replace(/<img[^>]*>/, "")
+      .replace(/<video[^>]*>/, "")
+      .replace(/<source[^>]*>/, "")
+      .replace(/<br\/?>/g, "")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+  }
+
+  photos.push({
+    lat: parseFloat(lat),
+    lon: parseFloat(lon),
+    imageUrl,
+    videoUrl,
+    timestamp: Date.now(),
+    description: cleanDescription
+  });
+}
+    }
     /* ───────── SAVE TO DB ───────── */
 
     assignment.recordedTrack = recordedTrack;

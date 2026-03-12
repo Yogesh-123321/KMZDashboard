@@ -22,15 +22,16 @@ router.post(
 
       const { surveyId, surveyName, userId } = req.body;
 
-      // ✅ STEP 1: Check duplicate
+      // ✅ Only block if assignment is still active
       const existingAssignment = await Assignment.findOne({
         surveyId,
-        assignedTo: userId
+        assignedTo: userId,
+        status: { $in: ["pending", "in_progress"] }
       });
 
       if (existingAssignment) {
         return res.status(400).json({
-          error: "This survey is already assigned to this user."
+          error: "This survey is already assigned and still active for this user."
         });
       }
 
@@ -63,7 +64,6 @@ router.post(
     }
   }
 );
-
 /* ───────── MY ASSIGNMENTS ───────── */
 router.get(
   "/my",
@@ -440,8 +440,8 @@ router.get(
       const cutoff = new Date(Date.now() - TWO_MINUTES);
 
       const surveyors = await AuthUser.find({})
-        .select("username role lastLocation lastLocationAt activeAssignment isActive")
-        .populate("activeAssignment", "surveyName status");
+  .select("username role lastLocation lastLocationAt activeAssignment isActive isOnBreak breakStartTime")
+  .populate("activeAssignment", "surveyName status");
 
       const result = surveyors.map(user => {
 
@@ -453,9 +453,10 @@ router.get(
           user.isActive && recentlyUpdated;
 
         return {
-          ...user.toObject(),
-          online   // 🔥 computed field
-        };
+  ...user.toObject(),
+  online,
+  isOnBreak: user.isOnBreak || false
+};
       });
 
       res.json(result);
@@ -552,6 +553,101 @@ router.get(
 
     } catch (err) {
       console.error("PROXIMITY ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+router.delete(
+  "/:id/unassign",
+  verifyToken,
+  requirePermission("ASSIGN_SURVEY"),
+  async (req, res) => {
+    try {
+      const assignment = await Assignment.findById(req.params.id);
+
+      if (!assignment) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+
+      // Optional safety: only allow unassign if not approved
+      if (assignment.status === "approved") {
+        return res.status(400).json({
+          error: "Approved assignments cannot be unassigned"
+        });
+      }
+
+      // Log activity before delete (optional but recommended)
+      await AssignmentActivity.create({
+        assignmentId: assignment._id,
+        userId: req.user.id,
+        action: "UNASSIGNED",
+        meta: {
+          surveyName: assignment.surveyName,
+          previousUser: assignment.assignedTo
+        }
+      });
+
+      await assignment.deleteOne();
+
+      res.json({ success: true });
+
+    } catch (err) {
+      console.error("UNASSIGN ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+/* ───────── SURVEYOR PENDING COUNTS ───────── */
+router.get(
+  "/surveyor-pending-counts",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const role = req.user.role;
+
+      if (role !== "ADMIN" && role !== "ROLE_5") {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+
+      const AuthUser = require("../models/AuthUser");
+
+      // Get all surveyors
+      const surveyors = await AuthUser.find({
+        role: { $in: ["ROLE_4"] }   // adjust if your surveyor role is different
+      }).select("username role");
+
+      // Aggregate pending assignments
+      const pendingCounts = await Assignment.aggregate([
+        {
+          $match: {
+            status: "pending"
+          }
+        },
+        {
+          $group: {
+            _id: "$assignedTo",
+            pendingCount: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const pendingMap = {};
+
+      pendingCounts.forEach(p => {
+        pendingMap[p._id.toString()] = p.pendingCount;
+      });
+
+      const result = surveyors.map(user => ({
+        _id: user._id,
+        username: user.username,
+        pendingAssignments: pendingMap[user._id.toString()] || 0
+      }));
+
+      res.json(result);
+
+    } catch (err) {
+      console.error("SURVEYOR COUNT ERROR:", err);
       res.status(500).json({ error: err.message });
     }
   }

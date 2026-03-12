@@ -9,6 +9,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { LayersControl } from "react-leaflet";
 import {
   Dialog,
   DialogContent,
@@ -155,8 +156,34 @@ function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
       style={{ height: "100%", width: "100%" }}
     >
       <ResizeFix />
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {bounds.length > 0 && <FitBounds bounds={bounds} />}
+<LayersControl position="topright">
+
+  {/* Satellite Base */}
+  <LayersControl.BaseLayer checked name="Satellite">
+    <TileLayer
+      attribution='Tiles © Esri'
+      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    />
+  </LayersControl.BaseLayer>
+
+  {/* Streets Base */}
+  <LayersControl.BaseLayer name="Streets">
+    <TileLayer
+      attribution='© OpenStreetMap contributors'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    />
+  </LayersControl.BaseLayer>
+
+  {/* Labels Overlay (Hybrid effect) */}
+  <LayersControl.Overlay checked name="Labels">
+    <TileLayer
+      attribution='Tiles © Esri'
+      url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+    />
+  </LayersControl.Overlay>
+
+</LayersControl>
+     {bounds.length > 0 && <FitBounds bounds={bounds} />}
 
       {/* Tracks */}
    {/* 🔵 Reference Tracks */}
@@ -268,35 +295,84 @@ function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
   </>
 )}
       {/* 📷 Photo Markers */}
+{/* 📷 / 🎥 MEDIA MARKERS */}
 {photos.map((photo, i) => {
   const coord = normalize(photo);
   if (!coord) return null;
 
   return (
-    <Marker key={`photo-${i}`} position={coord}>
-      <Popup>
+    <Marker
+      key={`photo-${i}`}
+      position={coord}
+     icon={L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width:30px;
+      height:30px;
+      background:white;
+      border-radius:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 3px 8px rgba(0,0,0,0.4);
+      font-size:16px;
+    ">
+      ${photo.imageUrl ? "📷" : "🎬"}
+    </div>
+  `,
+  iconSize: [30,30],
+  iconAnchor: [15,15]
+})}
+    >
+      <Popup maxWidth={320}>
         <div style={{ width: 280 }}>
-          <img
-            src={photo.imageUrl}
-            alt="Survey"
-            style={{
-              width: "100%",
-              borderRadius: 8,
-              marginBottom: 8
-            }}
-          />
+
+          {/* IMAGE */}
+          {photo.imageUrl && (
+            <img
+              src={photo.imageUrl}
+              alt="Survey"
+              style={{
+                width: "100%",
+                borderRadius: 8,
+                marginBottom: 8
+              }}
+            />
+          )}
+
+          {/* VIDEO */}
+          {photo.videoUrl && (
+            <video
+              key={photo.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              style={{
+                width: "100%",
+                borderRadius: 8,
+                marginBottom: 8
+              }}
+            >
+              <source src={photo.videoUrl} type="video/mp4" />
+            </video>
+          )}
+
           <div style={{ fontSize: 12 }}>
             {photo.description && (
               <div>
-                <strong>Description:</strong> {photo.description}
+                <strong>Description:</strong>{" "}
+                {photo.description.replace("Description:", "").trim()}
               </div>
             )}
+
             {photo.timestamp && (
               <div>
                 {new Date(Number(photo.timestamp)).toLocaleString()}
               </div>
             )}
           </div>
+
         </div>
       </Popup>
     </Marker>
@@ -375,7 +451,46 @@ const [approving, setApproving] = useState(false);
 
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
 const [finalFileName, setFinalFileName] = useState("");
+async function rejectAssignment(id) {
 
+  const confirmReject = confirm(
+    "Are you sure you want to reject and return this assignment to the surveyor?"
+  );
+
+  if (!confirmReject) return;
+
+  const token = localStorage.getItem("token");
+
+  try {
+
+    const res = await fetch(
+      `${API_BASE_URL}/api/assignments/${id}/reject`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Reject failed");
+      return;
+    }
+
+    alert("Assignment returned to surveyor");
+
+    setSelectedAssignment(null);
+
+    await loadAssignments();
+
+  } catch (err) {
+    console.error(err);
+    alert("Reject request failed");
+  }
+}
 async function approveAssignment(id, finalName) {
   if (!finalName || !finalName.trim()) {
     alert("Final file name is required");

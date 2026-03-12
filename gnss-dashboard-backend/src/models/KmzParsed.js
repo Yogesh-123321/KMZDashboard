@@ -19,7 +19,15 @@ const pointSchema = new mongoose.Schema({
   lat: Number,
   lon: Number,
   ele: Number,
-  imageFile: String
+
+  // Photo
+  imageFile: String,
+  imageUrl: String,
+
+  // Video
+  videoFile: String,
+  videoUrl: String
+
 }, { _id: false });
 
 const kmzParsedSchema = new mongoose.Schema(

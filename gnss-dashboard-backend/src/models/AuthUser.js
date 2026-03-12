@@ -22,7 +22,7 @@ const AuthUserSchema = new mongoose.Schema(
       default: "ROLE_1"
     },
 
-    // ✅ NEW FIELDS FOR LIVE MONITORING
+    // LIVE MONITORING
 
     lastLocation: {
       lat: { type: Number },
@@ -36,6 +36,18 @@ const AuthUserSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: false
+    },
+
+    /* NEW BREAK FEATURE */
+
+    isOnBreak: {
+      type: Boolean,
+      default: false
+    },
+
+    breakStartTime: {
+      type: Date,
+      default: null
     },
 
     activeAssignment: {

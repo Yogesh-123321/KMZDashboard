@@ -5,6 +5,7 @@ const healthRoutes = require("./routes/health.route");
 const filesRoutes = require("./routes/files.route");
 const kmzRoutes = require("./routes/kmz.route");
 const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
+const reportRoutes = require("./routes/report.routes");
 // const fileUpload = require("express-fileupload");
 const app = express();
 
@@ -34,6 +35,10 @@ app.use("/api/health", healthRoutes);
 app.use("/api/files", filesRoutes);
 app.use("/api/kmz", kmzRoutes);
 app.use("/kmz-images", express.static("public/kmz-images"));
+app.use("/api/reports", reportRoutes);
+// ADD THIS
+app.use("/kmz-videos", express.static("public/kmz-videos"));
+
 app.use(
   "/submitted-kmz",
   express.static("public/submitted-kmz")
