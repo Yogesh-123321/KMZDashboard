@@ -5,7 +5,8 @@ const AuthUser = require("../models/AuthUser");
 const { verifyToken } = require("../middleware/auth");
 const UserSession = require("../models/UserSession");
 const router = express.Router();
-
+const DeviceUsageLog = require("../models/DeviceUsageLog");
+const DeviceInventory = require("../models/DeviceInventory");
 const JWT_SECRET = "supersecretkey";
 router.post("/login", async (req, res) => {
   try {
@@ -66,21 +67,47 @@ await AuthUser.updateOne(
 });
 router.post("/logout", verifyToken, async (req, res) => {
   try {
+
     console.log("Logout user:", req.user);
 
+    const userId = req.user.id;
+
+    // 1️⃣ Update user active state
     await AuthUser.updateOne(
-      { _id: req.user.id },
+      { _id: userId },
       { $set: { isActive: false, activeAssignment: null } }
     );
-await UserSession.findOneAndUpdate(
-  { userId: req.user.id, logoutAt: null },
-  { $set: { logoutAt: new Date() } }
-);
+
+    // 2️⃣ Close user session
+    await UserSession.findOneAndUpdate(
+      { userId: userId, logoutAt: null },
+      { $set: { logoutAt: new Date() } }
+    );
+
+    // ⭐ NEW: close active device usage
+    await DeviceUsageLog.updateMany(
+      { userId: userId, disconnectedAt: null },
+      { $set: { disconnectedAt: new Date() } }
+    );
+
+    // ⭐ NEW: free devices used by this user
+    await DeviceInventory.updateMany(
+      { currentUser: userId },
+      {
+        $set: {
+          status: "available",
+          currentUser: null
+        }
+      }
+    );
+
     res.json({ success: true });
 
   } catch (err) {
+
     console.error("LOGOUT ERROR:", err);
     res.status(500).json({ error: err.message });
+
   }
 });
 router.patch("/location", verifyToken, async (req, res) => {

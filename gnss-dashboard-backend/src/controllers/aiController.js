@@ -1,46 +1,99 @@
 const Assignment = require("../models/Assignment");
-
-function extractJson(text) {
-  if (!text) return null;
-
-  // Remove markdown code fences if present
-  text = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-
-  if (firstBrace === -1 || lastBrace === -1) return null;
-
-  const jsonString = text.substring(firstBrace, lastBrace + 1);
-
-  try {
-    return JSON.parse(jsonString);
-  } catch (err) {
-    return null;
-  }
-}
+const { calculateDeviation } = require("./deviation.controller");
 
 exports.getAIAnalysis = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
 
+const assignment = await Assignment.findById(req.params.id);
     if (!assignment) {
-      return res.status(404).json({ message: "Assignment not found" });
+      return res.status(404).json({
+        message: "Assignment not found"
+      });
     }
 
     const threshold = Number(req.query.threshold || 3);
-    const thresholdKey = String(threshold);
 
-const deviationData =
-  assignment.deviationAnalyses?.get(thresholdKey);
-    if (!deviationData) {
-      return res.status(400).json({
-        message: "Deviation analysis not available"
-      });
+    const surveyId = assignment.surveyId;
+
+    /* ───────── FETCH ALL SEGMENTS OF SURVEY ───────── */
+
+    const assignments = await Assignment.find({
+  assignmentGroupId: assignment.assignmentGroupId,
+  status: { $in: ["completed", "approved"] }
+}).sort({ segmentIndex: 1 });
+
+    console.log("AI SURVEY:", surveyId);
+    console.log("SEGMENTS FOUND:", assignments.length);
+
+    if (!assignments.length) {
+      return res.json({ aiAnalysis: null });
     }
+
+    /* ───────── MERGE TRACKS ───────── */
+
+    let referenceTrack = [];
+    let recordedTrack = [];
+
+    for (const a of assignments) {
+
+      /* reference segments */
+
+      if (Array.isArray(a.segmentReferenceTracks)) {
+
+        for (const seg of a.segmentReferenceTracks) {
+
+          if (!Array.isArray(seg)) continue;
+
+          const cleaned = seg.filter(
+            p => typeof p.lat === "number" && typeof p.lon === "number"
+          );
+
+          if (cleaned.length > 1) {
+            referenceTrack.push(...cleaned);
+          }
+
+        }
+
+      }
+
+      /* recorded segments */
+
+      if (Array.isArray(a.recordedTrack)) {
+
+        for (const seg of a.recordedTrack) {
+
+          if (!Array.isArray(seg)) continue;
+
+          const cleaned = seg.filter(
+            p => typeof p.lat === "number" && typeof p.lon === "number"
+          );
+
+          if (cleaned.length > 1) {
+            recordedTrack.push(...cleaned);
+          }
+
+        }
+
+      }
+
+    }
+
+    console.log("REFERENCE POINTS:", referenceTrack.length);
+    console.log("RECORDED POINTS:", recordedTrack.length);
+
+    /* ───────── SAFETY CHECK ───────── */
+
+    if (!referenceTrack.length || !recordedTrack.length) {
+      return res.json({ aiAnalysis: null });
+    }
+
+    /* ───────── CALCULATE DEVIATION ───────── */
+
+    const deviationData = calculateDeviation(
+      referenceTrack,
+      recordedTrack,
+      threshold
+    );
 
     const {
       totalPoints,
@@ -49,6 +102,8 @@ const deviationData =
       maxDeviation,
       avgDeviation
     } = deviationData;
+
+    /* ───────── AI PROMPT ───────── */
 
     const prompt = `
 You are a professional GNSS survey quality auditor.
@@ -77,51 +132,58 @@ Average Deviation: ${avgDeviation.toFixed(2)} meters
 Threshold: ${threshold}
 `;
 
+    /* ───────── CALL OPENROUTER ───────── */
+
     const response = await fetch(
-  "https://openrouter.ai/api/v1/chat/completions",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional GNSS survey auditor. Respond strictly with valid JSON."
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`
         },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.2
-    })
-  }
-);
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a professional GNSS survey auditor. Respond strictly with valid JSON."
+            },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.2
+        })
+      }
+    );
 
-const data = await response.json();
+    const data = await response.json();
 
-const rawContent =
-  data?.choices?.[0]?.message?.content || "";
+    const rawContent =
+      data?.choices?.[0]?.message?.content || "";
 
-let aiParsed;
+    let aiParsed;
 
-try {
-  aiParsed = JSON.parse(rawContent);
-} catch (err) {
-  console.error("AI JSON parse failed:");
-  console.error(rawContent);
+    try {
+      aiParsed = JSON.parse(rawContent);
+    } catch (err) {
 
-  aiParsed = {
-    classification: "Format Error",
-    severity: "Unknown",
-    recommendation: "Review",
-    confidenceScore: 0,
-    summary: "AI returned invalid format."
-  };
-}
-    // 🔒 Structure validation
+      console.error("AI JSON parse failed:");
+      console.error(rawContent);
+
+      aiParsed = {
+        classification: "Format Error",
+        severity: "Unknown",
+        recommendation: "Review",
+        confidenceScore: 0,
+        summary: "AI returned invalid format."
+      };
+
+    }
+
+    /* ───────── VALIDATE STRUCTURE ───────── */
+
     const requiredFields = [
       "classification",
       "severity",
@@ -134,6 +196,7 @@ try {
       requiredFields.every(field => field in aiParsed);
 
     if (!isValid) {
+
       console.error("AI response missing required fields.");
       console.error(rawContent);
 
@@ -144,14 +207,20 @@ try {
         confidenceScore: 0,
         summary: "AI returned incomplete structure."
       };
+
     }
 
-    return res.json({ aiAnalysis: aiParsed });
+    return res.json({
+      aiAnalysis: aiParsed
+    });
 
   } catch (err) {
+
     console.error("AI analysis failed:", err);
+
     return res.status(500).json({
       message: "AI analysis failed"
     });
+
   }
 };

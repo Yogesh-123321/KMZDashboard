@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchKmzFiles } from "@/lib/api";
 import AdminLayout from "@/layouts/AdminLayout";
 import AssignSurveyPage from "./AssignSurveyPage";
-
+import InventoryManagement from "./InventoryManagement";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export default function AdminDashboard() {
@@ -42,21 +42,10 @@ export default function AdminDashboard() {
     alert("Assigned!");
   }
 
-return (
+  return (
   <AdminLayout>
-    {({ activePage, selectedFile }) => {
-     if (activePage === "assign") {
-  return <AssignSurveyPage selectedFile={selectedFile} />;
-}
-
-
-      if (activePage === "surveyors") {
-        return <div>Surveyor Management Page</div>;
-      }
-
-      if (activePage === "status") {
-        return <div>Field Survey Status Page</div>;
-      }
+    {({ selectedFile }) => {
+      return <AssignSurveyPage selectedFile={selectedFile} />;
     }}
   </AdminLayout>
 );

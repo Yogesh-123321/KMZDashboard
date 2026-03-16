@@ -13,11 +13,14 @@ exports.getAssignmentTrack = async (req, res) => {
       return res.status(404).json({ message: "Assignment not found" });
     }
 
-    res.json({
-      referenceTrack: assignment.referenceTrack || [],
-      recordedTrack: assignment.recordedTrack || [],
-      photos: assignment.photos || []   // 🔥 ADD THIS
-    });
+   res.json({
+  referenceTrack: assignment.referenceTrack || [],
+  segmentReferenceTracks: assignment.segmentReferenceTracks || [],
+  recordedTrack: assignment.recordedTrack || [],
+  photos: assignment.photos || [],
+  segmentIndex: assignment.segmentIndex || 0,
+  totalSegments: assignment.totalSegments || 1
+});
 
   } catch (err) {
     console.error("TRACK CONTROLLER ERROR:", err);
@@ -40,19 +43,18 @@ exports.rejectAssignment = async (req, res) => {
     }
 
     // 🔥 1. Change status
-    assignment.status = "pending";
-
-    // 🔥 2. Invalidate previous submission
-    assignment.submissionVersion =
-      (assignment.submissionVersion || 1) + 1;
-
-    // 🔥 3. Clear recorded tracks on server
-    assignment.recordedTrackSegments = [];
-
-    // 🔥 4. Clear deviation cache
-    assignment.deviationAnalyses = new Map();
-
-    await assignment.save();
+   await Assignment.updateMany(
+  { assignmentGroupId: assignment.assignmentGroupId },
+  {
+    status: "pending",
+    recordedTrack: [],
+    photos: [],
+    deviationAnalyses: new Map(),
+    completedAt: null,
+    approvedAt: null,
+    approvedBy: null
+  }
+);
 
     res.json({
       message: "Assignment rejected successfully",

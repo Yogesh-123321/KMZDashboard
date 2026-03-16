@@ -6,6 +6,7 @@ const filesRoutes = require("./routes/files.route");
 const kmzRoutes = require("./routes/kmz.route");
 const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
 const reportRoutes = require("./routes/report.routes");
+const deviceRoutes = require("./routes/device.routes");
 // const fileUpload = require("express-fileupload");
 const app = express();
 
@@ -44,5 +45,5 @@ app.use(
   express.static("public/submitted-kmz")
 );
 app.use("/api/explorer", require("./routes/explorer.routes"));
-
+app.use("/api/devices", deviceRoutes);
 module.exports = app;

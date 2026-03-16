@@ -238,3 +238,99 @@ exports.getDeviationAnalysis = async (req, res) => {
     });
   }
 };
+function calculateDeviation(referenceTrack, recordedTrack, threshold = 3) {
+
+  let deviations = [];
+  let maxDeviation = 0;
+  let sumDeviation = 0;
+  let deviatedPoints = 0;
+
+  for (const recPoint of recordedTrack) {
+
+    if (
+      typeof recPoint.lat !== "number" ||
+      typeof recPoint.lon !== "number"
+    ) continue;
+
+    const refLat = recPoint.lat;
+
+    const pXY = latLonToXY(
+      recPoint.lat,
+      recPoint.lon,
+      refLat
+    );
+
+    let minDist = Infinity;
+    let bestProjection = null;
+
+    for (let j = 0; j < referenceTrack.length - 1; j++) {
+
+      const a = latLonToXY(
+        referenceTrack[j].lat,
+        referenceTrack[j].lon,
+        refLat
+      );
+
+      const b = latLonToXY(
+        referenceTrack[j + 1].lat,
+        referenceTrack[j + 1].lon,
+        refLat
+      );
+
+      const result = pointToSegmentDistance(pXY, a, b);
+
+      if (result.distance < minDist) {
+        minDist = result.distance;
+        bestProjection = result;
+      }
+    }
+
+    if (!isFinite(minDist) || !bestProjection) continue;
+
+    const isDeviated = minDist > threshold;
+
+    if (isDeviated) deviatedPoints++;
+    if (minDist > maxDeviation) maxDeviation = minDist;
+
+    sumDeviation += minDist;
+
+    const projectedLatLon =
+      xyToLatLon(
+        bestProjection.projX,
+        bestProjection.projY,
+        refLat
+      );
+
+    deviations.push({
+      lat: recPoint.lat,
+      lon: recPoint.lon,
+      deviation: minDist,
+      deviated: isDeviated,
+      projectedLat: projectedLatLon.lat,
+      projectedLon: projectedLatLon.lon
+    });
+  }
+
+  const totalPoints = deviations.length;
+
+  const avgDeviation =
+    totalPoints > 0
+      ? sumDeviation / totalPoints
+      : 0;
+
+  const deviationPercent =
+    totalPoints > 0
+      ? (deviatedPoints / totalPoints) * 100
+      : 0;
+
+  return {
+    threshold,
+    totalPoints,
+    deviatedPoints,
+    deviationPercent,
+    maxDeviation,
+    avgDeviation,
+    deviations
+  };
+}
+exports.calculateDeviation = calculateDeviation;

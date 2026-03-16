@@ -14,9 +14,27 @@ const AssignmentSchema = new mongoose.Schema(
       type: String,
       required: true
     },
-
+assignmentGroupId: {
+  type: String,
+  required: true,
+  index: true
+},
     surveyName: String,
+    segmentIndex: {
+      type: Number,
+      default: 0
+    },
 
+    totalSegments: {
+      type: Number,
+      default: 1
+    },
+
+    segmentReferenceTracks: {
+      type: [[TrackPointSchema]],
+      default: []
+    }, 
+    
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "AuthUser",

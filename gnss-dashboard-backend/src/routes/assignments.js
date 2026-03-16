@@ -12,6 +12,21 @@ const upload = require("../middleware/upload");
 const { submitKmz } = require("../controllers/assignmentController");
 const { uploadKmzCopy } = require("../services/drive.upload.js");
 const { calculateMinDistance } = require("../utils/geoDistance");
+const { mergeKmzFiles } = require("../services/kmzMergeService");
+const { 
+  calculateDeviation
+} = require("../controllers/deviation.controller");
+async function areAllSegmentsCompleted(groupId) {
+
+  const assignments = await Assignment.find({
+    assignmentGroupId: groupId
+  });
+
+  if (!assignments.length) return false;
+
+  return assignments.every(a => a.status === "completed");
+}
+/* ───────── ASSIGN SURVEY ───────── */
 /* ───────── ASSIGN SURVEY ───────── */
 router.post(
   "/assign",
@@ -20,46 +35,63 @@ router.post(
   async (req, res) => {
     try {
 
-      const { surveyId, surveyName, userId } = req.body;
-
-      // ✅ Only block if assignment is still active
-      const existingAssignment = await Assignment.findOne({
+      const {
         surveyId,
-        assignedTo: userId,
-        status: { $in: ["pending", "in_progress"] }
-      });
+        surveyName,
+        userId,
+        segmentIndex = 0,
+        totalSegments = 1,
+        segmentTracks = []
+      } = req.body;
+const assignmentGroupId =
+  req.body.assignmentGroupId ||
+  `${surveyId}_${Date.now()}`;
+      const existingSegmentForUser = await Assignment.findOne({
+  assignmentGroupId,
+  segmentIndex,
+  assignedTo: userId,
+  status: { $in: ["pending", "in_progress"] }
+});
 
-      if (existingAssignment) {
-        return res.status(400).json({
-          error: "This survey is already assigned and still active for this user."
-        });
-      }
+if (existingSegmentForUser) {
+  return res.status(400).json({
+    error: `Segment ${segmentIndex + 1} already assigned to this user`
+  });
+}
 
+      /* 3️⃣ Get full reference track (unchanged) */
       const referenceTrack =
         await getKmzTrackFromSurveyId(surveyId);
 
-      const assignment = await Assignment.create({
-        surveyId,
-        surveyName,
-        assignedTo: userId,
-        status: "pending",
-        referenceTrack,
-        recordedTrack: []
-      });
-
+      /* 4️⃣ Create assignment */
+     const assignment = await Assignment.create({
+  surveyId,
+  assignmentGroupId,
+  surveyName,
+  assignedTo: userId,
+  status: "pending",
+  recordedTrack: [],
+  segmentIndex,
+  totalSegments,
+  segmentReferenceTracks: segmentTracks
+});
+      /* 5️⃣ Activity log */
       await AssignmentActivity.create({
         assignmentId: assignment._id,
         userId: req.user.id,
         action: "ASSIGNED",
         meta: {
           surveyName,
-          assignedTo: userId
+          assignedTo: userId,
+          segmentIndex,
+          totalSegments
         }
       });
 
       res.json(assignment);
 
     } catch (err) {
+      console.error("ASSIGN ERROR:", err);
       res.status(500).json({ error: err.message });
     }
   }
@@ -114,6 +146,7 @@ router.get(
 );
 
 /* ───────── APPROVE ASSIGNMENT ───────── */
+/* ───────── APPROVE ASSIGNMENT ───────── */
 router.patch(
   "/:id/approve",
   verifyToken,
@@ -130,9 +163,23 @@ router.patch(
 
       const assignment = await Assignment.findById(req.params.id);
 
+      /* ✅ CHECK ASSIGNMENT EXISTS */
+
       if (!assignment) {
         return res.status(404).json({
           error: "Assignment not found"
+        });
+      }
+
+      /* ✅ ENSURE ALL SEGMENTS COMPLETED */
+
+     const allCompleted = await areAllSegmentsCompleted(
+  assignment.assignmentGroupId
+);
+
+      if (!allCompleted) {
+        return res.status(400).json({
+          error: "All segments must be completed before approval"
         });
       }
 
@@ -148,27 +195,56 @@ router.patch(
         });
       }
 
-      /* 🔥 UPLOAD TO GOOGLE DRIVE */
+const surveyAssignments = await Assignment.find({
+  assignmentGroupId: assignment.assignmentGroupId,
+  status: "completed"
+}).sort({ segmentIndex: 1 });
+
+      if (!surveyAssignments.length) {
+        return res.status(400).json({
+          error: "No completed segment KMZ files found"
+        });
+      }
+
+      /* 🔥 MERGE KMZ FILES */
+
+      const mergedKmzPath = await mergeKmzFiles(
+        surveyAssignments,
+        finalName
+      );
+
+      /* 🔥 UPLOAD MERGED KMZ TO GOOGLE DRIVE */
 
       const driveFile = await uploadKmzCopy({
-        localPath: assignment.submittedKmzPath,
+        localPath: mergedKmzPath,
         name: finalName.trim() + ".kmz"
       });
 
-      /* 🔥 SAVE DRIVE FILE INFO */
+      /* 🔥 MARK ALL SEGMENTS APPROVED */
 
-      assignment.status = "approved";
-      assignment.approvedAt = new Date();
-      assignment.approvedBy = req.user.id;
-      assignment.approvedDriveFileId = driveFile.id;
-
-      await assignment.save();
+  await Assignment.updateMany(
+{
+  assignmentGroupId: assignment.assignmentGroupId
+},
+{
+  status: "pending",
+  recordedTrack: [],
+  photos: [],
+  submittedKmzPath: null,
+  deviationAnalyses: new Map(),
+  completedAt: null,
+  approvedAt: null,
+  approvedBy: null
+}
+);
+      /* 🔥 ACTIVITY LOG */
 
       await AssignmentActivity.create({
         assignmentId: assignment._id,
         userId: req.user.id,
-        action: "APPROVED",
+        action: "SURVEY_APPROVED",
         meta: {
+          surveyId: assignment.surveyId,
           driveFileId: driveFile.id,
           fileName: finalName
         }
@@ -180,87 +256,141 @@ router.patch(
       });
 
     } catch (err) {
+
       console.error("APPROVE ERROR:", err);
-      res.status(500).json({ error: err.message });
+
+      res.status(500).json({
+        error: err.message
+      });
+
     }
   }
 );
 /* ───────── REJECT ASSIGNMENT ───────── */
-router.patch(
-  "/:id/reject",
-  verifyToken,
-  async (req, res) => {
-    try {
-      const role = req.user.role;
+router.patch("/:id/reject", verifyToken, async (req, res) => {
+  try {
 
-      if (role !== "ADMIN" && role !== "ROLE_5") {
-        return res.status(403).json({ error: "Not allowed" });
-      }
+    const assignment = await Assignment.findById(req.params.id);
 
-      const assignment = await Assignment.findById(req.params.id);
-
-      if (!assignment) {
-        return res.status(404).json({ error: "Assignment not found" });
-      }
-
-      if (assignment.status !== "completed") {
-        return res.status(400).json({
-          error: "Only completed assignments can be rejected"
-        });
-      }
-
-      // Move back to pending
-      assignment.status = "pending";
-      assignment.recordedTrack = [];
-      assignment.recordedTrackSegments = [];
-      assignment.deviationAnalyses = new Map();
-
-      // Optional: clear completion metadata
-      assignment.completedAt = null;
-      assignment.approvedAt = null;
-      assignment.approvedBy = null;
-
-      await assignment.save();
-
-      /* ACTIVITY LOG */
-      await AssignmentActivity.create({
-        assignmentId: assignment._id,
-        userId: req.user.id,
-        action: "REJECTED"
-      });
-
-      res.json({ success: true, assignment });
-
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
     }
+
+    const { segmentIndex } = req.body;
+
+    if (segmentIndex === undefined) {
+      return res.status(400).json({
+        error: "segmentIndex required"
+      });
+    }
+
+    const targetSegment = await Assignment.findOne({
+      assignmentGroupId: assignment.assignmentGroupId,
+      segmentIndex
+    });
+
+    if (!targetSegment) {
+      return res.status(404).json({
+        error: "Segment not found"
+      });
+    }
+
+    if (targetSegment.status !== "completed") {
+      return res.status(400).json({
+        error: "Segment is not completed yet"
+      });
+    }
+
+    targetSegment.status = "pending";
+    targetSegment.recordedTrack = [];
+    targetSegment.deviationAnalyses = new Map();
+    targetSegment.completedAt = null;
+
+    await targetSegment.save();
+
+    res.json({
+      success: true,
+      segmentIndex
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-);
+});
 /* ───────── APPROVAL QUEUE ───────── */
 router.get(
   "/approval-queue",
   verifyToken,
   async (req, res) => {
     try {
+
       const role = req.user.role;
 
       if (role !== "ADMIN" && role !== "ROLE_5") {
         return res.status(403).json({ error: "Not allowed" });
       }
 
-      const assignments = await Assignment.find({
-        status: "completed"
-      })
-        .populate("assignedTo", "username")
-        .populate("approvedBy", "username")
-        .sort({ createdAt: -1 });
+      const queue = await Assignment.aggregate([
+  {
+    $match: {
+      status: { $in: ["pending","in_progress","completed"] }
+    }
+  },
+  {
+  $group: {
+      _id: "$assignmentGroupId",
+      sampleAssignmentId: { $first: "$_id" },
+    assignmentGroupId: { $first: "$assignmentGroupId" },
+    surveyId: { $first: "$surveyId" },
+    surveyName: { $first: "$surveyName" },
+    createdAt: { $first: "$createdAt" },
 
-      res.json(assignments);
+    totalSegments: { $sum: 1 },
+
+    completedSegments: {
+      $sum: {
+        $cond: [
+          { $eq: ["$status", "completed"] },
+          1,
+          0
+        ]
+      }
+    }
+  }
+},
+  {
+    $addFields: {
+      status: {
+        $cond: [
+          { $eq: ["$completedSegments", "$totalSegments"] },
+          "completed",
+          {
+            $cond: [
+              { $gt: ["$completedSegments", 0] },
+              "in_progress",
+              "pending"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    $sort: { createdAt: -1 }
+  }
+]);
+     const populated = await Assignment.populate(queue, [
+  { path: "surveyors", select: "username" }
+]);
+
+      res.json(populated);
+
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   }
 );
+router.get("/:id/ai-analysis", getAIAnalysis);
 router.get(
   "/:id/activity",
   verifyToken,
@@ -279,36 +409,25 @@ router.get(
   }
 );
 router.get(
-  "/by-survey/:fileId/activity",
+  "/by-group/:groupId/activity",
   verifyToken,
   async (req, res) => {
     try {
-      const { fileId } = req.params;
 
-      const assignment = await Assignment.findOne({
-        surveyId: fileId
-      });
+      const assignments = await Assignment.find({
+        assignmentGroupId: req.params.groupId
+      }).select("_id");
 
-      let logs = [];
+      const ids = assignments.map(a => a._id);
 
-      if (assignment) {
-        logs = await AssignmentActivity.find({
-          $or: [
-            { assignmentId: assignment._id },
-            { surveyId: fileId }
-          ]
-        })
-          .populate("userId", "username")
-          .sort({ createdAt: -1 });
-      } else {
-        logs = await AssignmentActivity.find({
-          surveyId: fileId
-        })
-          .populate("userId", "username")
-          .sort({ createdAt: -1 });
-      }
+      const logs = await AssignmentActivity.find({
+        assignmentId: { $in: ids }
+      })
+      .populate("userId", "username")
+      .sort({ createdAt: -1 });
 
       res.json(logs);
+
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -415,7 +534,157 @@ router.patch(
     }
   }
 );
-router.get("/:id/ai-analysis", getAIAnalysis);
+/* ───────── MERGED SURVEY TRACK (ALL SEGMENTS) ───────── */
+router.get(
+  "/survey-group/:groupId/merged-track",
+  verifyToken,
+  async (req, res) => {
+    try{
+    const assignments = await Assignment.find({
+      assignmentGroupId: req.params.groupId,
+      status: { $in: ["completed", "approved"] }
+    }).sort({ segmentIndex: 1 });
+
+      let referenceTrack = [];
+      let recordedTrack = [];
+      let photos = [];
+
+      for (const a of assignments) {
+
+        /* reference segments */
+        if (Array.isArray(a.segmentReferenceTracks)) {
+
+          for (const seg of a.segmentReferenceTracks) {
+
+            if (!Array.isArray(seg)) continue;
+
+            const cleaned = seg.filter(
+              p => typeof p.lat === "number" && typeof p.lon === "number"
+            );
+
+            if (cleaned.length > 1) {
+              referenceTrack.push(cleaned);
+            }
+
+          }
+
+        }
+
+        /* recorded segments */
+        if (Array.isArray(a.recordedTrack)) {
+
+          for (const seg of a.recordedTrack) {
+
+            if (!Array.isArray(seg)) continue;
+
+            const cleaned = seg.filter(
+              p => typeof p.lat === "number" && typeof p.lon === "number"
+            );
+
+            if (cleaned.length > 1) {
+              recordedTrack.push(cleaned);
+            }
+
+          }
+
+        }
+
+        /* photos */
+        if (Array.isArray(a.photos)) {
+          photos.push(...a.photos);
+        }
+
+      }
+console.log("REFERENCE SEGMENTS:", referenceTrack.length);
+console.log("RECORDED SEGMENTS:", recordedTrack.length);
+      res.json({
+        referenceTrack,
+        recordedTrack,
+        photos
+      });
+
+    } catch (err) {
+
+      console.error("MERGED TRACK ERROR:", err);
+
+      res.status(500).json({
+        error: err.message
+      });
+
+    }
+  }
+);
+router.get(
+  "/survey-group/:groupId/deviation-analysis",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const threshold = Number(req.query.threshold) || 3;
+
+      const assignments = await Assignment.find({
+        assignmentGroupId: req.params.groupId,
+        status: { $in: ["completed", "approved"] }
+      }).sort({ segmentIndex: 1 });
+
+      if (!assignments.length) {
+        return res.json({
+          deviations: [],
+          totalPoints: 0,
+          deviatedPoints: 0,
+          deviationPercent: 0
+        });
+      }
+
+      let referenceTrack = [];
+      let recordedTrack = [];
+
+      for (const a of assignments) {
+
+        /* reference segments */
+        if (a.segmentReferenceTracks?.length) {
+          for (const seg of a.segmentReferenceTracks) {
+            referenceTrack.push(...seg);
+          }
+        }
+
+        /* recorded segments */
+        if (a.recordedTrack?.length) {
+          for (const seg of a.recordedTrack) {
+            recordedTrack.push(...seg);
+          }
+        }
+
+      }
+
+      if (!referenceTrack.length || !recordedTrack.length) {
+        return res.json({
+          deviations: [],
+          totalPoints: 0,
+          deviatedPoints: 0,
+          deviationPercent: 0
+        });
+      }
+
+      const result = calculateDeviation(
+        referenceTrack,
+        recordedTrack,
+        threshold
+      );
+
+      res.json(result);
+
+    } catch (err) {
+
+      console.error("SURVEY DEVIATION ERROR:", err);
+
+      res.status(500).json({
+        error: err.message
+      });
+
+    }
+  }
+);
 router.post(
   "/:id/submit-kmz",
   verifyToken,
@@ -504,7 +773,7 @@ router.get(
       const assignments = await Assignment.find({
         assignedTo: userId,
         status: { $in: ["pending", "in_progress"] }
-      }).select("surveyName referenceTrack status");
+      }).select("surveyName segmentReferenceTracks status");
 
       if (!assignments.length) {
         return res.json({
@@ -518,13 +787,14 @@ router.get(
 
       for (const assignment of assignments) {
 
-        if (!assignment.referenceTrack || !assignment.referenceTrack.length) {
+        if (!assignment.segmentReferenceTracks?.length) {
           continue;
         }
 
+        const track = assignment.segmentReferenceTracks;
         const minDistance = calculateMinDistance(
           userPoint,
-          assignment.referenceTrack
+          track
         );
 
         results.push({
@@ -648,6 +918,116 @@ router.get(
 
     } catch (err) {
       console.error("SURVEYOR COUNT ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+router.get(
+  "/group/:groupId/surveyors",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const assignments = await Assignment.find({
+        assignmentGroupId: req.params.groupId
+      })
+      .populate("assignedTo", "username")
+      .select("assignedTo segmentIndex status");
+
+      const result = assignments.map(a => ({
+        username: a.assignedTo?.username,
+        segmentIndex: a.segmentIndex,
+        status: a.status
+      }));
+
+      res.json(result);
+
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+/* ───────── SURVEY STATUS (FOR FIELD DASHBOARD) ───────── */
+router.get(
+  "/survey-status",
+  verifyToken,
+  async (req, res) => {
+    try {
+
+      const role = req.user.role;
+      if (role !== "ADMIN" && role !== "ROLE_5") {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+
+      const surveys = await Assignment.aggregate([
+        {
+  $group: {
+    _id: "$assignmentGroupId",
+
+    assignmentGroupId: { $first: "$assignmentGroupId" },
+    surveyId: { $first: "$surveyId" },
+    surveyName: { $first: "$surveyName" },
+    createdAt: { $first: "$createdAt" },
+
+    totalSegments: { $sum: 1 },
+
+    completedSegments: {
+      $sum: {
+        $cond: [{ $eq: ["$status", "completed"] }, 1, 0]
+      }
+    },
+
+    approvedSegments: {
+      $sum: {
+        $cond: [{ $eq: ["$status", "approved"] }, 1, 0]
+      }
+    },
+
+    users: {
+      $push: {
+        userId: "$assignedTo",
+        segmentIndex: "$segmentIndex",
+        status: "$status"
+      }
+    }
+  }
+},
+
+        {
+          $addFields: {
+            status: {
+              $cond: [
+                { $eq: ["$approvedSegments", "$totalSegments"] },
+                "approved",
+                {
+                  $cond: [
+                    { $eq: ["$completedSegments", "$totalSegments"] },
+                    "completed",
+                    {
+                      $cond: [
+                        { $gt: ["$completedSegments", 0] },
+                        "in_progress",
+                        "pending"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+
+        { $sort: { createdAt: -1 } }
+      ]);
+
+      const populated = await Assignment.populate(
+        surveys,
+        { path: "users.userId", select: "username" }
+      );
+
+      res.json(populated);
+
+    } catch (err) {
       res.status(500).json({ error: err.message });
     }
   }

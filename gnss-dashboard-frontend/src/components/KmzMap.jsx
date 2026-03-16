@@ -230,30 +230,27 @@ export default function KmzMap({
         style={{ height: "100%", width: "100%" }}
       >
 
-        <LayersControl position="topright">
+       <LayersControl position="topright">
 
-          <LayersControl.BaseLayer checked name="Satellite">
-            <TileLayer
-              attribution="Tiles © Esri"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-            />
-          </LayersControl.BaseLayer>
+  {/* Satellite Base */}
+  <LayersControl.BaseLayer checked name="Satellite">
+  <TileLayer
+  url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+  attribution="© OpenTopoMap © OpenStreetMap"
+/>
+</LayersControl.BaseLayer>
 
-          <LayersControl.BaseLayer name="Streets">
-            <TileLayer
-              attribution="© OpenStreetMap contributors"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-          </LayersControl.BaseLayer>
+  {/* Streets Base */}
+  <LayersControl.BaseLayer name="Streets">
+    <TileLayer
+      attribution='© OpenStreetMap contributors'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    />
+  </LayersControl.BaseLayer>
 
-          <LayersControl.Overlay checked name="Labels">
-            <TileLayer
-              attribution="Tiles © Esri"
-              url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-            />
-          </LayersControl.Overlay>
+  
 
-        </LayersControl>
+</LayersControl>
 
         <MapController bounds={allBounds} />
 

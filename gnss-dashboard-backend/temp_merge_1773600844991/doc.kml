@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Reference Track</name>
+      <Style>
+        <LineStyle>
+          <color>ffff0000</color>
+          <width>6</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+77.33318,28.406541666666666,0 77.33314166666668,28.406668333333332,0 77.33310333333334,28.406795000000002,0 77.33306333333333,28.40692166666667,0 77.33302499999999,28.407048333333332,0 </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Reference Track</name>
+      <Style>
+        <LineStyle>
+          <color>ffff0000</color>
+          <width>6</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+77.33272666666667,28.408054999999997,0 77.33264833333332,28.408305000000002,0 77.33257333333333,28.408560000000005,0 </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Recorded Track</name>
+      <Style>
+        <LineStyle>
+          <color>ff0000ff</color>
+          <width>6</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+77.31367,28.380319999999998,0 77.31374000000001,28.37944,0 77.31381,28.37856,0 77.31388,28.37767,0 77.31396,28.376789999999996,0 77.31403,28.375909999999998,0 77.31411,28.375420000000002,0 </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Reference Track</name>
+      <Style>
+        <LineStyle>
+          <color>ffff0000</color>
+          <width>6</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+77.33257333333333,28.408560000000005,0 77.33253666666666,28.408693333333336,0 77.332465,28.408965,0 77.33239333333333,28.40922666666667,0 77.33232500000001,28.409474999999997,0 </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Recorded Track</name>
+      <Style>
+        <LineStyle>
+          <color>ff0000ff</color>
+          <width>6</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+77.31552,28.360059999999997,0 77.31559,28.359159999999996,0 77.31567,28.35827,0 </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>

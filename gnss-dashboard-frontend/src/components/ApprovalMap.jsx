@@ -72,19 +72,37 @@ export default function ApprovalMap({
 }) {
 
   const [selectedDeviation, setSelectedDeviation] = useState(null);
-
   const [measureRef, setMeasureRef] = useState(null);
   const [measureRec, setMeasureRec] = useState(null);
   const [measureDistance, setMeasureDistance] = useState(null);
 
-  /* Normalize coordinates */
+  /* Normalize coordinates (supports lon OR lng) */
   const normalize = (p) => {
-    const lat = Number(p?.lat);
-    const lon = Number(p?.lon);
 
-    if (isNaN(lat) || isNaN(lon)) return null;
+  const lat = Number(
+    p?.lat ??
+    p?.latitude ??
+    p?.Lat
+  );
 
-    return [lat, lon];
+  const lon = Number(
+    p?.lon ??
+    p?.lng ??
+    p?.longitude ??
+    p?.Lon
+  );
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  return [lat, lon];
+};
+  /* Extract flat list of points from segmented or flat track */
+  const extractPoints = (track) => {
+    if (!track) return [];
+
+    if (Array.isArray(track[0])) return track.flat();
+
+    return track;
   };
 
   /* Collect bounds */
@@ -92,18 +110,14 @@ export default function ApprovalMap({
 
     const all = [];
 
-    trackData?.referenceTrack?.forEach(segment => {
-      segment?.forEach(p => {
-        const coord = normalize(p);
-        if (coord) all.push(coord);
-      });
+    extractPoints(trackData?.referenceTrack).forEach(p => {
+      const coord = normalize(p);
+      if (coord) all.push(coord);
     });
 
-    trackData?.recordedTrack?.forEach(segment => {
-      segment?.forEach(p => {
-        const coord = normalize(p);
-        if (coord) all.push(coord);
-      });
+    extractPoints(trackData?.recordedTrack).forEach(p => {
+      const coord = normalize(p);
+      if (coord) all.push(coord);
     });
 
     deviationPoints.forEach(p => {
@@ -142,52 +156,86 @@ export default function ApprovalMap({
       {bounds.length > 0 && <FitBounds bounds={bounds} />}
 
       {/* 🔵 Reference Tracks */}
-      {trackData?.referenceTrack?.map((track, index) => (
-        <Polyline
-          key={`ref-${index}`}
-          positions={track?.map(p => normalize(p)).filter(Boolean)}
-          pathOptions={{
-            color: "#2563eb",
-            weight: 8
-          }}
-          interactive
-          eventHandlers={{
-            click: (e) => {
-              setMeasureRef(e.latlng);
-              setMeasureRec(null);
-              setMeasureDistance(null);
-            }
-          }}
-        />
-      ))}
+      {trackData?.referenceTrack && (() => {
+
+        const segments = Array.isArray(trackData.referenceTrack[0])
+          ? trackData.referenceTrack
+          : [trackData.referenceTrack];
+
+        return segments.map((track, index) => {
+
+          const coords = track
+            ?.map(p => normalize(p))
+            .filter(Boolean);
+
+          if (!coords || coords.length < 2) return null;
+
+          return (
+            <Polyline
+              key={`ref-${index}`}
+              positions={coords}
+              pathOptions={{
+                color: "#2563eb",
+                weight: 8
+              }}
+              interactive
+              eventHandlers={{
+                click: (e) => {
+                  setMeasureRef(e.latlng);
+                  setMeasureRec(null);
+                  setMeasureDistance(null);
+                }
+              }}
+            />
+          );
+        });
+
+      })()}
 
       {/* 🔴 Recorded Tracks */}
-      {trackData?.recordedTrack?.map((track, index) => (
-        <Polyline
-          key={`rec-${index}`}
-          positions={track?.map(p => normalize(p)).filter(Boolean)}
-          pathOptions={{
-            color: "#dc2626",
-            weight: 8
-          }}
-          interactive
-          eventHandlers={{
-            click: (e) => {
+      {trackData?.recordedTrack && (() => {
 
-              if (!measureRef) {
-                alert("Click reference track first");
-                return;
-              }
+        const segments = Array.isArray(trackData.recordedTrack[0])
+          ? trackData.recordedTrack
+          : [trackData.recordedTrack];
 
-              const rec = e.latlng;
-              const dist = L.latLng(measureRef).distanceTo(rec);
+        return segments.map((track, index) => {
 
-              setMeasureRec(rec);
-              setMeasureDistance(dist);
-            }
-          }}
-        />
-      ))}
+          const coords = track
+            ?.map(p => normalize(p))
+            .filter(Boolean);
+
+          if (!coords || coords.length < 2) return null;
+
+          return (
+            <Polyline
+              key={`rec-${index}`}
+              positions={coords}
+              pathOptions={{
+                color: "#dc2626",
+                weight: 8
+              }}
+              interactive
+              eventHandlers={{
+                click: (e) => {
+
+                  if (!measureRef) {
+                    alert("Click reference track first");
+                    return;
+                  }
+
+                  const rec = e.latlng;
+                  const dist = L.latLng(measureRef).distanceTo(rec);
+
+                  setMeasureRec(rec);
+                  setMeasureDistance(dist);
+                }
+              }}
+            />
+          );
+        });
+
+      })()}
 
       {/* Measurement Line */}
       {measureRef && measureRec && (
@@ -316,33 +364,32 @@ export default function ApprovalMap({
 
               <div style={{ width: 300 }}>
 
-  {photo.imageUrl ? (
-  <img
-    src={photo.imageUrl}
-    alt="Survey"
-    style={{
-      width: "100%",
-      borderRadius: 8,
-      marginBottom: 8
-    }}
-  />
-) : photo.videoUrl ? (
-  <video
-    key={photo.videoUrl}
-    controls
-    playsInline
-    preload="metadata"
-    style={{
-      width: "100%",
-      borderRadius: 8,
-      marginBottom: 8
-    }}
-  >
-    <source src={photo.videoUrl} type="video/mp4" />
-  </video>
-) : (
-  <div style={{ fontSize: 12 }}>No media</div>
-)}
+                {photo.imageUrl ? (
+                  <img
+                    src={photo.imageUrl}
+                    alt="Survey"
+                    style={{
+                      width: "100%",
+                      borderRadius: 8,
+                      marginBottom: 8
+                    }}
+                  />
+                ) : photo.videoUrl ? (
+                  <video
+                    controls
+                    playsInline
+                    preload="metadata"
+                    style={{
+                      width: "100%",
+                      borderRadius: 8,
+                      marginBottom: 8
+                    }}
+                  >
+                    <source src={photo.videoUrl} type="video/mp4" />
+                  </video>
+                ) : (
+                  <div style={{ fontSize: 12 }}>No media</div>
+                )}
 
                 {photo.description && (
                   <div

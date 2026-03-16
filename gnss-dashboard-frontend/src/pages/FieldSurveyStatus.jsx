@@ -121,7 +121,9 @@ export default function FieldSurveyStatus() {
   const [loadingProximity, setLoadingProximity] = useState(null);
 
   const [refreshCountdown, setRefreshCountdown] = useState(10);
-
+const [surveyorList, setSurveyorList] = useState([]);
+const [surveyorDialogOpen, setSurveyorDialogOpen] = useState(false);
+const [loadingSurveyors, setLoadingSurveyors] = useState(false);
   /* Fetch assignments */
 
   useEffect(() => {
@@ -133,7 +135,7 @@ export default function FieldSurveyStatus() {
         setLoadingAssignments(true);
 
         const res = await fetch(
-          `${API_BASE_URL}/api/assignments/all`,
+          `${API_BASE_URL}/api/assignments/survey-status`,
           {
             headers: {
               Authorization: "Bearer " + localStorage.getItem("token")
@@ -209,7 +211,7 @@ export default function FieldSurveyStatus() {
     try {
 
       const res = await fetch(
-        `${API_BASE_URL}/api/assignments/${a._id}/activity`,
+        `${API_BASE_URL}/api/assignments/by-group/${a.assignmentGroupId}/activity`,
         {
           headers: {
             Authorization: "Bearer " + localStorage.getItem("token")
@@ -298,7 +300,38 @@ export default function FieldSurveyStatus() {
     iconSize: [14, 14],
     iconAnchor: [7, 7]
   });
+async function openSurveyors(groupId) {
 
+  try {
+
+    setLoadingSurveyors(true);
+
+    const res = await fetch(
+      `${API_BASE_URL}/api/assignments/group/${groupId}/surveyors`,
+      {
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token")
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    setSurveyorList(data);
+    setSurveyorDialogOpen(true);
+
+  } catch {
+    toast.error("Failed to load surveyors");
+  } finally {
+    setLoadingSurveyors(false);
+  }
+}
+function getAssignmentStatus(a) {
+  if (a.status === "approved") return "approved";
+  if (a.status === "completed") return "completed";
+  if (a.status === "in_progress") return "in_progress";
+  return "pending";
+}
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col p-6 gap-6 overflow-hidden">
 
@@ -489,7 +522,7 @@ export default function FieldSurveyStatus() {
                   {assignments.map(a => (
 
                     <tr
-                      key={a._id}
+                      key={a.assignmentGroupId}
                       className="border-b odd:bg-muted/20 hover:bg-muted/40 cursor-pointer"
                       onClick={() => openActivity(a)}
                     >
@@ -498,10 +531,31 @@ export default function FieldSurveyStatus() {
                         {a.surveyName || a.surveyId}
                       </td>
 
-                      <td>{a.status}</td>
-
-                      <td>{a.assignedTo?.username || "-"}</td>
-
+                      <td>
+                        <span
+                          className={`px-2 py-1 rounded text-xs capitalize ${a.status === "approved"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : a.status === "completed"
+                                ? "bg-green-100 text-green-700"
+                                : a.status === "in_progress"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-gray-100 text-gray-700"
+                            }`}
+                        >
+                          {getAssignmentStatus(a)}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="text-primary underline text-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSurveyors(a.assignmentGroupId);
+                          }}
+                        >
+                          View Surveyors
+                        </button>
+                      </td>
                       <td>{new Date(a.createdAt).toLocaleDateString()}</td>
 
                       <td>{a.approvedBy?.username || "-"}</td>
@@ -539,37 +593,80 @@ export default function FieldSurveyStatus() {
 
           <div className="space-y-3">
 
-            {activityLogs.map(log => (
+            {Array.isArray(activityLogs) ? (
+              activityLogs.map(log => (
+                <div
+                  key={log._id}
+                  className={`border rounded-lg p-3 text-sm ${getActivityColor(log.action)}`}
+                >
+                  <div className="font-semibold">
+                    {log.action.replace("_", " ")}
+                  </div>
 
-              <div
-                key={log._id}
-                className={`border rounded-lg p-3 text-sm ${getActivityColor(
-                  log.action
-                )}`}
-              >
+                  <div className="text-xs opacity-70">
+                    {log.userId?.username || "System"}
+                  </div>
 
-                <div className="font-semibold">
-                  {log.action.replace("_", " ")}
+                  <div className="text-xs opacity-70">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </div>
                 </div>
-
-                <div className="text-xs opacity-70">
-                  {log.userId?.username || "System"}
-                </div>
-
-                <div className="text-xs opacity-70">
-                  {new Date(log.createdAt).toLocaleString()}
-                </div>
-
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No activity logs
               </div>
-
-            ))}
-
+            )}
           </div>
 
         </DialogContent>
 
       </Dialog>
+      <Dialog open={surveyorDialogOpen} onOpenChange={setSurveyorDialogOpen}>
+        <DialogContent className="max-h-[60vh] overflow-y-auto">
 
+          <DialogHeader>
+            <DialogTitle>Surveyors for this Survey</DialogTitle>
+          </DialogHeader>
+
+          {loadingSurveyors ? (
+            <Spinner />
+          ) : (
+            <div className="space-y-2">
+
+              {surveyorList.map((u, i) => (
+  <div
+    key={i}
+    className="border rounded-lg p-3 flex justify-between items-center"
+  >
+    <div className="font-medium">
+      {u.username}
+    </div>
+
+    <span
+      className={`px-2 py-1 rounded text-xs ${
+        u.status === "completed"
+          ? "bg-green-100 text-green-700"
+          : u.status === "in_progress"
+          ? "bg-orange-100 text-orange-700"
+          : "bg-gray-100 text-gray-700"
+      }`}
+    >
+      {u.status}
+    </span>
+  </div>
+))}
+              {!surveyorList.length && (
+                <div className="text-sm text-muted-foreground">
+                  No surveyors found
+                </div>
+              )}
+
+            </div>
+          )}
+
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

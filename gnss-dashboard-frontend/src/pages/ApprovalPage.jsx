@@ -48,15 +48,19 @@ function ResizeFix() {
   const map = useMap();
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
-    return () => clearTimeout(timeout);
+    if (!map) return;
+
+    const timer = setTimeout(() => {
+      if (map._loaded) {
+        map.invalidateSize();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [map]);
 
   return null;
 }
-
 /* ───────── Simple SVG Gauge ───────── */
 function DeviationGauge({ percent }) {
   const radius = 70;
@@ -151,20 +155,20 @@ function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
 
   return (
     <MapContainer
-      center={bounds[0] || [20.5937, 78.9629]}
-      zoom={18}
-      style={{ height: "100%", width: "100%" }}
-    >
+  center={bounds[0] || [20.5937, 78.9629]}
+  zoom={16}
+  style={{ height: "100%", width: "100%" }}
+>
       <ResizeFix />
 <LayersControl position="topright">
 
   {/* Satellite Base */}
   <LayersControl.BaseLayer checked name="Satellite">
-    <TileLayer
-      attribution='Tiles © Esri'
-      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-    />
-  </LayersControl.BaseLayer>
+  <TileLayer
+  url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+  attribution="© OpenTopoMap © OpenStreetMap"
+/>
+</LayersControl.BaseLayer>
 
   {/* Streets Base */}
   <LayersControl.BaseLayer name="Streets">
@@ -174,13 +178,7 @@ function ApprovalMap({ trackData, deviationPoints = [], photos = []  }) {
     />
   </LayersControl.BaseLayer>
 
-  {/* Labels Overlay (Hybrid effect) */}
-  <LayersControl.Overlay checked name="Labels">
-    <TileLayer
-      attribution='Tiles © Esri'
-      url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-    />
-  </LayersControl.Overlay>
+  
 
 </LayersControl>
      {bounds.length > 0 && <FitBounds bounds={bounds} />}
@@ -393,6 +391,11 @@ const [aiAnalysis, setAiAnalysis] = useState(null);
 const [loadingAssignments, setLoadingAssignments] = useState(false);
 const [loadingMap, setLoadingMap] = useState(false);
 const [approving, setApproving] = useState(false);
+const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+const [rejectSegmentIndex, setRejectSegmentIndex] = useState(null);
+const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+const [finalFileName, setFinalFileName] = useState("");
+
   async function loadAssignments() {
   setLoadingAssignments(true);
   const res = await fetch(
@@ -406,21 +409,38 @@ const [approving, setApproving] = useState(false);
   setAssignments(await res.json());
   setLoadingAssignments(false);
 }
-  async function loadMapData(id, th) {
+  async function loadMapData(assignmentRow, th){
+
   setLoadingMap(true);
 
   const token = localStorage.getItem("token");
-
+const assignmentGroupId = assignmentRow.assignmentGroupId;
+const assignmentId = assignmentRow.sampleAssignmentId;
+const surveyId = assignmentRow.surveyId;
   try {
+
+// const assignment = assignments.find(
+//   a => a.assignmentGroupId === id
+// );
+    /* TRACKS */
+
     const trackRes = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/track`,
+      `${API_BASE_URL}/api/assignments/survey-group/${assignmentGroupId}/merged-track`,
       { headers: { Authorization: "Bearer " + token } }
     );
 
-    setTrackData(await trackRes.json());
+    const trackJson = await trackRes.json();
+console.log("TRACK RESPONSE", trackJson);
+    setTrackData({
+  referenceTrack: trackJson.referenceTrack || [],
+  recordedTrack: trackJson.recordedTrack || trackJson.tracks || [],
+  photos: trackJson.photos || []
+});
+
+    /* DEVIATION */
 
     const devRes = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/deviation-analysis?threshold=${th}`,
+      `${API_BASE_URL}/api/assignments/survey-group/${assignmentGroupId}/deviation-analysis?threshold=${th}`,
       { headers: { Authorization: "Bearer " + token } }
     );
 
@@ -431,11 +451,20 @@ const [approving, setApproving] = useState(false);
     }
 
     const devJson = await devRes.json();
+
+    console.log("DEVIATION RESPONSE", devJson);
+
     setDeviationData(devJson);
 
+    /* AI ANALYSIS */
+
     const aiRes = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/ai-analysis?threshold=${th}`,
-      { headers: { Authorization: "Bearer " + token } }
+      `${API_BASE_URL}/api/assignments/${assignmentId}/ai-analysis?threshold=${th}`,
+      {
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      }
     );
 
     if (aiRes.ok) {
@@ -444,52 +473,40 @@ const [approving, setApproving] = useState(false);
     } else {
       setAiAnalysis(null);
     }
+
   } finally {
     setLoadingMap(false);
   }
 }
-
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
-const [finalFileName, setFinalFileName] = useState("");
-async function rejectAssignment(id) {
-
-  const confirmReject = confirm(
-    "Are you sure you want to reject and return this assignment to the surveyor?"
-  );
-
-  if (!confirmReject) return;
-
+async function rejectAssignment(id, segmentIndex) {
+console.log("Rejecting segment:", segmentIndex);
   const token = localStorage.getItem("token");
 
-  try {
-
-    const res = await fetch(
-      `${API_BASE_URL}/api/assignments/${id}/reject`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: "Bearer " + token
-        }
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      alert(data.error || "Reject failed");
-      return;
+  const res = await fetch(
+    `${API_BASE_URL}/api/assignments/${id}/reject`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
+      body: JSON.stringify({
+        segmentIndex
+      })
     }
+  );
 
-    alert("Assignment returned to surveyor");
+  const data = await res.json();
 
-    setSelectedAssignment(null);
-
-    await loadAssignments();
-
-  } catch (err) {
-    console.error(err);
-    alert("Reject request failed");
+  if (!res.ok) {
+    alert(data.error || "Reject failed");
+    return;
   }
+
+  alert(`Segment ${segmentIndex + 1} returned to surveyor`);
+
+  setSelectedAssignment(null);
+  await loadAssignments();
 }
 async function approveAssignment(id, finalName) {
   if (!finalName || !finalName.trim()) {
@@ -557,11 +574,13 @@ async function approveAssignment(id, finalName) {
 
       {/* TABLE */}
       <div className="bg-card border rounded-xl p-4">
-        <table className="w-full text-sm">
+        <div className="max-h-[400px] overflow-y-auto">
+          <table className="w-full text-sm">
           <thead className="border-b">
             <tr className="text-left">
               <th className="py-2">Survey</th>
-              <th>Surveyor</th>
+              <th>Total Segments</th>
+              <th>Completed Segments</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -581,15 +600,16 @@ async function approveAssignment(id, finalName) {
   ) : (
     assignments.map(a => (
       <tr
-        key={a._id}
+key={a.assignmentGroupId}
         className="border-b cursor-pointer hover:bg-muted/40"
         onClick={async () => {
           setSelectedAssignment(a);
-          await loadMapData(a._id, threshold);
+         await loadMapData(a, threshold);
         }}
       >
         <td>{a.surveyName}</td>
-        <td>{a.assignedTo?.username}</td>
+        <td>{a.totalSegments}</td>
+        <td>{a.completedSegments}</td>
         <td>{a.status}</td>
       </tr>
     ))
@@ -597,12 +617,11 @@ async function approveAssignment(id, finalName) {
 </tbody>
         </table>
       </div>
-
+</div>
       {/* CONSOLE */}
       {selectedAssignment && (
         <div className="fixed inset-0 bg-black/70 z-50">
-<div className="absolute inset-4 bg-card border rounded-2xl p-6 flex flex-col h-full max-h-[calc(100vh-2rem)] overflow-hidden">
-            <div className="flex justify-between mb-4">
+<div className="absolute inset-4 bg-card border rounded-2xl p-6 flex flex-col h-full max-h-[calc(100vh-2rem)] overflow-y-auto">            <div className="flex justify-between mb-4">
               <div className="text-xl font-semibold">
                 Approval Console — {selectedAssignment.surveyName}
               </div>
@@ -614,11 +633,11 @@ async function approveAssignment(id, finalName) {
               </button>
             </div>
 
-<div className="flex flex-1 gap-4 min-h-0">
-              <div className="flex-1 border rounded-xl overflow-hidden">
+<div className="flex flex-1 gap-4 min-h-0 h-full">
+             <div className="flex-1 border rounded-xl overflow-hidden h-[75vh]">
                 <ApprovalMap
 key={
-  selectedAssignment?._id +
+  selectedAssignment?.assignmentGroupId +
   "_" +
   (trackData?.referenceTrack?.length || 0) +
   "_" +
@@ -643,7 +662,7 @@ key={
                     onChange={(e) => {
                       const newVal = Number(e.target.value);
                       setThreshold(newVal);
-                      loadMapData(selectedAssignment._id, newVal);
+                      loadMapData(selectedAssignment, newVal);
                     }}
                     className="w-full"
                   />
@@ -731,13 +750,14 @@ key={
   Approve
 </Button>
 
-                 <button
-  onClick={() =>
-    rejectAssignment(selectedAssignment._id)
-  }
+            <button
+ onClick={() => {
+  setRejectSegmentIndex(null);
+  setRejectDialogOpen(true);
+}}
   className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg"
 >
-  Reject & Return to Surveyor
+  Reject Segment
 </button>
                 </div>
 
@@ -779,14 +799,69 @@ key={
 
       <Button
         onClick={() =>
-          approveAssignment(
-            selectedAssignment._id,
-            finalFileName
-          )
+          approveAssignment(selectedAssignment.sampleAssignmentId, finalFileName)
         }
       >
         Confirm Approval
       </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+<Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>Select Segment to Reject</DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-2">
+
+      {selectedAssignment &&
+        Array.from({ length: selectedAssignment.totalSegments }).map((_, i) => (
+
+          <Button
+            key={i}
+            variant={rejectSegmentIndex === i ? "default" : "outline"}
+            className="w-full"
+            onClick={() => setRejectSegmentIndex(i)}
+          >
+            Segment {i + 1}
+          </Button>
+
+        ))}
+
+    </div>
+
+    <DialogFooter className="gap-2">
+
+      <Button
+        variant="outline"
+        onClick={() => setRejectDialogOpen(false)}
+      >
+        Cancel
+      </Button>
+
+      <Button
+        disabled={rejectSegmentIndex === null}
+        onClick={() => {
+  const segment = rejectSegmentIndex;
+
+  if (segment === null || segment === undefined) {
+    alert("Please select a segment");
+    return;
+  }
+
+  rejectAssignment(
+    selectedAssignment.sampleAssignmentId,
+    segment
+  );
+
+  setRejectDialogOpen(false);
+  setRejectSegmentIndex(null);
+}}
+      >
+        Reject Segment
+      </Button>
+
     </DialogFooter>
   </DialogContent>
 </Dialog>

@@ -14,6 +14,7 @@ import ManageSurveyors from "./pages/ManageSurveyors";
 import FieldSurveyStatus from "./pages/FieldSurveyStatus";
 import ApprovalPage from "./pages/ApprovalPage";
 import { Toaster } from "sonner";
+import InventoryManagement from "./pages/InventoryManagement";
 function App() {
   const [loggedIn, setLoggedIn] = useState(
     !!localStorage.getItem("token")
@@ -153,7 +154,20 @@ function App() {
                   <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
                 )}
               </button>
-
+          {/* Inventory */}
+<button
+  onClick={() => setAdminPage("inventory")}
+  className={`relative pb-2 text-sm font-medium transition-colors ${
+    adminPage === "inventory"
+      ? "text-blue-600"
+      : "text-muted-foreground hover:text-foreground"
+  }`}
+>
+  Inventory Management
+  {adminPage === "inventory" && (
+    <span className="absolute left-0 bottom-0 h-[2px] w-full bg-blue-600 rounded-full" />
+  )}
+</button>
             </div>
           )}
         </div>
@@ -201,6 +215,7 @@ function App() {
             )}
             {role === "ADMIN" && adminPage === "status" && <FieldSurveyStatus />}
             {adminPage === "approval" && <ApprovalPage />}
+            {role === "ADMIN" && adminPage === "inventory" && <InventoryManagement />}
           </>
         ) : selectedAssignment ? (
           <SurveyView
@@ -270,6 +285,10 @@ function App() {
           element={
             loggedIn ? <DashboardLayout /> : <Navigate to="/login" />
           }
+        />
+        <Route
+          path="/inventory"
+          element={<InventoryManagement />}
         />
       </Routes>
     </BrowserRouter>
