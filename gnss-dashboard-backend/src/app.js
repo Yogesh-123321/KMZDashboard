@@ -14,7 +14,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",   // local dev frontend
-      "https://your-frontend-domain.com" // later production frontend
+      "https://gnss.onrender.com",
+      "https://gnss.technotrendz.co.in" // later production frontend
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -39,7 +40,7 @@ app.use("/kmz-images", express.static("public/kmz-images"));
 app.use("/api/reports", reportRoutes);
 // ADD THIS
 app.use("/kmz-videos", express.static("public/kmz-videos"));
-
+app.use("/api/surveyors", require("./routes/reliability.routes"));
 app.use(
   "/submitted-kmz",
   express.static("public/submitted-kmz")

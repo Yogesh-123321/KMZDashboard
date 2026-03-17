@@ -1,14 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { Eye, EyeOff } from "lucide-react";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -28,7 +20,7 @@ export default function ManageSurveyors() {
   const [users, setUsers] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [showPassword, setShowPassword] = useState({});
-
+const [reliabilityMap, setReliabilityMap] = useState({});
   /* NEW STATE */
   const [selectedUser, setSelectedUser] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -103,6 +95,14 @@ const sortedUsers = [...filteredUsers].sort((a, b) => {
     });
     const data = await res.json();
     setUsers(data);
+    const map = {};
+
+for (const user of data) {
+  const score = await fetchReliability(user._id);
+  map[user._id] = score;
+}
+
+setReliabilityMap(map);
   }
 
   useEffect(() => {
@@ -197,7 +197,25 @@ async function openProfile(user) {
   }
 }
 
+async function fetchReliability(userId) {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/surveyors/${userId}/reliability`,
+      { headers: authHeader }
+    );
 
+    return await res.json();
+  } catch (err) {
+    console.error("Reliability fetch failed", err);
+    return null;
+  }
+}
+function getScoreColor(score) {
+  if (score >= 85) return "text-green-500";
+  if (score >= 70) return "text-blue-500";
+  if (score >= 50) return "text-orange-500";
+  return "text-red-500";
+}
   /* ---------------- UI ---------------- */
 
 return (
@@ -321,7 +339,7 @@ return (
   {sortedUsers.map(user => {
 
     const isEditing = editingId === user._id;
-
+const reliability = reliabilityMap[user._id]?.reliabilityScore;
     return (
     
       <div
@@ -372,16 +390,24 @@ return (
     </>
   ) : (
    
-              <div className="flex items-center justify-center gap-2 font-semibold text-sm">
+             <div className="flex flex-col items-center gap-1">
 
-                <span
-                  className={`w-2.5 h-2.5 rounded-full ${user.isActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
-                    }`}
-                />
+  {/* USERNAME ROW */}
+  <div className="flex items-center gap-2 font-semibold text-sm">
+    <span
+      className={`w-2.5 h-2.5 rounded-full ${
+        user.isActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+      }`}
+    />
+    {user.username}
+  </div>
 
-                {user.username}
+  {/* RELIABILITY BELOW */}
+  <div className={`text-xs font-semibold ${getScoreColor(reliability)}`}>
+    Reliability: {reliability ?? "--"}
+  </div>
 
-              </div>
+</div>
 
   )}
 
