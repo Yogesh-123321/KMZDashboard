@@ -222,19 +222,14 @@ const surveyAssignments = await Assignment.find({
 
       /* 🔥 MARK ALL SEGMENTS APPROVED */
 
-  await Assignment.updateMany(
+ await Assignment.updateMany(
 {
   assignmentGroupId: assignment.assignmentGroupId
 },
 {
-  status: "pending",
-  recordedTrack: [],
-  photos: [],
-  submittedKmzPath: null,
-  deviationAnalyses: new Map(),
-  completedAt: null,
-  approvedAt: null,
-  approvedBy: null
+  status: "approved",              // ✅ correct status
+  approvedAt: new Date(),          // ✅ store timestamp
+  approvedBy: req.user.id          // ✅ store admin user
 }
 );
       /* 🔥 ACTIVITY LOG */
@@ -961,36 +956,39 @@ router.get(
 
       const surveys = await Assignment.aggregate([
         {
-  $group: {
-    _id: "$assignmentGroupId",
+          $group: {
+            _id: "$assignmentGroupId",
 
-    assignmentGroupId: { $first: "$assignmentGroupId" },
-    surveyId: { $first: "$surveyId" },
-    surveyName: { $first: "$surveyName" },
-    createdAt: { $first: "$createdAt" },
+            assignmentGroupId: { $first: "$assignmentGroupId" },
+            surveyId: { $first: "$surveyId" },
+            surveyName: { $first: "$surveyName" },
+            createdAt: { $first: "$createdAt" },
 
-    totalSegments: { $sum: 1 },
+            approvedBy: { $first: "$approvedBy" },   // ✅ ADD
+            approvedAt: { $first: "$approvedAt" },   // ✅ ADD
 
-    completedSegments: {
-      $sum: {
-        $cond: [{ $eq: ["$status", "completed"] }, 1, 0]
-      }
-    },
+            totalSegments: { $sum: 1 },
 
-    approvedSegments: {
-      $sum: {
-        $cond: [{ $eq: ["$status", "approved"] }, 1, 0]
-      }
-    },
+            completedSegments: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "completed"] }, 1, 0]
+              }
+            },
 
-    users: {
-      $push: {
-        userId: "$assignedTo",
-        segmentIndex: "$segmentIndex",
-        status: "$status"
-      }
-    }
-  }
+            approvedSegments: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "approved"] }, 1, 0]
+              }
+            },
+
+            users: {
+              $push: {
+                userId: "$assignedTo",
+                segmentIndex: "$segmentIndex",
+                status: "$status"
+              }
+            }
+          }
 },
 
         {
@@ -1020,10 +1018,10 @@ router.get(
         { $sort: { createdAt: -1 } }
       ]);
 
-      const populated = await Assignment.populate(
-        surveys,
-        { path: "users.userId", select: "username" }
-      );
+      const populated = await Assignment.populate(surveys, [
+  { path: "users.userId", select: "username" },
+  { path: "approvedBy", select: "username" } // ✅ REQUIRED
+]);
 
       res.json(populated);
 

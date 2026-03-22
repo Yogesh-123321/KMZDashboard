@@ -118,21 +118,20 @@ export default function InventoryManagement() {
 
           <table className="w-full text-sm">
 
-            <thead className="border-b">
-              <tr className="text-left">
-                <th className="py-2">Device ID</th>
-                <th>Device Name</th>
-                <th>Status</th>
-                <th>Current User</th>
-                <th>Connected At</th>
-              </tr>
-            </thead>
+              <thead className="border-b">
+                <tr className="text-left">
+                  <th className="py-2">Device ID</th>
+                  <th>Status</th>
+                  <th>Current User</th>
+                  <th>Connected At</th>
+                </tr>
+              </thead>
 
             <tbody>
 
               {(!devices || devices.length === 0) && (
                 <tr>
-                  <td colSpan="5" className="text-center py-6 text-muted-foreground">
+                  <td colSpan="4" className="text-center py-6 text-muted-foreground">
                     No devices connected yet
                   </td>
                 </tr>
@@ -151,21 +150,14 @@ export default function InventoryManagement() {
                   </td>
 
                   <td>
-                    {d.deviceName || "-"}
-                  </td>
-
-                  <td>
-
                     <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        d.status === "in_use"
+                      className={`px-2 py-1 rounded text-xs ${d.status === "in_use"
                           ? "bg-green-100 text-green-700"
                           : "bg-gray-100 text-gray-600"
-                      }`}
+                        }`}
                     >
                       {d.status}
                     </span>
-
                   </td>
 
                   <td>
@@ -173,15 +165,12 @@ export default function InventoryManagement() {
                   </td>
 
                   <td>
-
                     {d.connectedAt
                       ? new Date(d.connectedAt).toLocaleString()
                       : "-"}
-
                   </td>
 
                 </tr>
-
               ))}
 
             </tbody>

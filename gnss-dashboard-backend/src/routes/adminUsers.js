@@ -13,8 +13,35 @@ router.get(
   verifyToken,
   requirePermission("MANAGE_USERS"),
   async (req, res) => {
-    const users = await AuthUser.find();
-    res.json(users);
+    try {
+
+      const TWO_MINUTES = 2 * 60 * 1000;
+      const cutoff = new Date(Date.now() - TWO_MINUTES);
+
+      const users = await AuthUser.find();
+
+      const result = users.map(user => {
+
+        const recentlyUpdated =
+          user.lastLocationAt &&
+          user.lastLocationAt >= cutoff;
+
+        const online =
+          user.isActive && recentlyUpdated;
+
+        return {
+          ...user.toObject(),
+          isActive: online   // ✅ FIX HERE
+        };
+
+      });
+
+      res.json(result);
+
+    } catch (err) {
+      console.error("ADMIN USERS ERROR:", err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );
 

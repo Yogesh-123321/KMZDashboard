@@ -106,8 +106,16 @@ setReliabilityMap(map);
   }
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+
+  loadUsers(); // initial load
+
+  const interval = setInterval(() => {
+    loadUsers(); // refresh every 10s
+  }, 10000);
+
+  return () => clearInterval(interval);
+
+}, []);
 
   /* ---------------- CREATE ---------------- */
 

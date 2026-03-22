@@ -14,33 +14,28 @@ router.post("/connect", verifyToken, async (req, res) => {
 
     const { deviceId, deviceName } = req.body;
 
-    const userId = req.user.id;
+let device = await DeviceInventory.findOne({ deviceId });
 
-    let device = await DeviceInventory.findOne({ deviceId });
+if (!device) {
+  device = await DeviceInventory.create({
+    deviceId,
+    deviceName: deviceName || deviceId, // ✅ fallback
+    status: "in_use",
+    currentUser: userId,
+    connectedAt: new Date(),
+    lastSeen: new Date()
+  });
+} else {
+  device.status = "in_use";
+  device.currentUser = userId;
+  device.connectedAt = new Date();
+  device.lastSeen = new Date();
 
-    /* If device not in inventory create it */
+  // ✅ only update name if provided
+  if (deviceName) device.deviceName = deviceName;
 
-    if (!device) {
-
-      device = await DeviceInventory.create({
-        deviceId,
-        deviceName,
-        status: "in_use",
-        currentUser: userId,
-        connectedAt: new Date(),
-        lastSeen: new Date()
-      });
-
-    } else {
-
-      device.status = "in_use";
-      device.currentUser = userId;
-      device.connectedAt = new Date();
-      device.lastSeen = new Date();
-
-      await device.save();
-
-    }
+  await device.save();
+}
 
     /* Check if usage session already exists */
 
